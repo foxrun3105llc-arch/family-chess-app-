@@ -1,0 +1,1484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#FFE3C9">
+<title>Chess Learning App</title>
+<!--
+  ============================================================================
+  CHESS LEARNING APP — single-file build
+  ----------------------------------------------------------------------------
+  SECTIONS:
+    1. CSS (pastel theme, iPad-friendly touch targets)
+    2. HTML screens (family gate, profiles, home, lesson, quiz, puzzles,
+       play vs computer, live games, parent dashboard)
+    3. JS:
+       A. FIREBASE_CONFIG (<<< GROWN-UP: FILL THIS IN >>>)
+       B. Firebase init + anonymous auth + family-code gate
+       C. Profiles (per-device remember-me)
+       D. Curriculum data (12 lessons) + lesson player
+       E. Quiz engine
+       F. Puzzle trainer (adaptive ladder)
+       G. Chess board renderer (tap-to-move, chess.js rules)
+       H. Computer AI (alpha-beta minimax, levels 1-5)
+       I. Live cross-iPad games + pass-and-play
+       J. Parent dashboard (PIN-gated)
+       K. Coaching directives from Stella + activity log
+       L. Rewards (stars, badges, streaks, confetti) + boot
+  ============================================================================
+-->
+<style>
+/* ============================ 1. CSS ================================== */
+:root{
+  --cream:#FFF9F1; --peach:#FFE3C9; --mint:#D3EEDC; --lavender:#E2D8F7;
+  --sky:#CFE8FA; --butter:#FFEBA8; --rose:#FFD9E0; --coral:#FFB59E;
+  --ink:#4A4458; --ink-soft:#7A7390; --white:#FFFFFF;
+  --sq-light:#F6E7C8; --sq-dark:#D9A97E;
+  --shadow:0 6px 18px rgba(120,100,140,.14);
+  --radius:22px;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Rounded","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  background:var(--cream); color:var(--ink);
+  min-height:100vh; min-height:100dvh;
+  touch-action:manipulation; overscroll-behavior:none;
+  -webkit-user-select:none; user-select:none;
+}
+#app{max-width:980px;margin:0 auto;padding:16px 16px 48px;}
+.screen{display:none;animation:fadeIn .25s ease;}
+.screen.active{display:block;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+h1{font-size:32px;margin:12px 0;} h2{font-size:24px;margin:10px 0;} h3{font-size:19px;margin:8px 0;}
+p{font-size:17px;line-height:1.55;color:var(--ink);}
+.muted{color:var(--ink-soft);} .center{text-align:center;}
+.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;margin:14px 0;}
+.card.peach{background:var(--peach);} .card.mint{background:var(--mint);}
+.card.lavender{background:var(--lavender);} .card.sky{background:var(--sky);}
+.card.butter{background:var(--butter);} .card.rose{background:var(--rose);}
+.btn{
+  display:inline-block;border:none;cursor:pointer;font-weight:700;color:var(--ink);
+  font-size:19px;padding:16px 26px;border-radius:18px;margin:8px 6px 8px 0;
+  background:var(--butter);box-shadow:0 4px 0 rgba(0,0,0,.08);min-height:56px;min-width:44px;
+  transition:transform .08s ease;
+}
+.btn:active{transform:scale(.96);}
+.btn.primary{background:#FFC98B;} .btn.mint{background:var(--mint);}
+.btn.sky{background:var(--sky);} .btn.lavender{background:var(--lavender);}
+.btn.rose{background:var(--rose);} .btn.ghost{background:#F1EDE6;}
+.btn.big{font-size:22px;padding:20px 34px;width:100%;margin:10px 0;}
+.btn:disabled{opacity:.45;cursor:default;}
+.topbar{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+.backbtn{border:none;background:var(--white);box-shadow:var(--shadow);border-radius:14px;
+  font-size:20px;font-weight:700;color:var(--ink);min-width:52px;min-height:52px;cursor:pointer;}
+.backbtn:active{transform:scale(.94);}
+.profile-chip{margin-left:auto;background:var(--white);border-radius:999px;padding:8px 16px;
+  box-shadow:var(--shadow);font-weight:700;display:flex;align-items:center;gap:8px;min-height:52px;}
+.avatar{width:40px;height:40px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+  font-size:22px;font-weight:800;color:#fff;flex:none;}
+/* lesson path */
+.lesson-row{display:flex;align-items:center;gap:14px;background:var(--white);border-radius:18px;
+  box-shadow:var(--shadow);padding:14px 16px;margin:10px 0;cursor:pointer;min-height:76px;}
+.lesson-row:active{transform:scale(.98);}
+.lesson-row.locked{opacity:.5;cursor:default;}
+.lesson-num{width:52px;height:52px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+  font-size:22px;font-weight:800;background:var(--lavender);color:var(--ink);}
+.lesson-row.done .lesson-num{background:var(--mint);}
+.lesson-info{flex:1;} .lesson-info .t{font-weight:800;font-size:18px;} .lesson-info .s{color:var(--ink-soft);font-size:14px;}
+.stars{color:#E8A93D;font-size:20px;letter-spacing:2px;}
+/* chess board */
+.board-wrap{display:flex;justify-content:center;margin:12px 0;}
+.board{display:grid;grid-template-columns:repeat(8,1fr);width:min(92vw,560px);aspect-ratio:1/1;
+  border-radius:14px;overflow:hidden;box-shadow:var(--shadow);border:6px solid #B9835A;}
+.square{position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+.square.light{background:var(--sq-light);} .square.dark{background:var(--sq-dark);}
+.square .piece{font-size:calc(min(92vw,560px)/8*0.72);line-height:1;pointer-events:none;}
+.piece.w{color:#FFFDF7;text-shadow:0 0 3px #5a4a3a,0 2px 2px rgba(0,0,0,.35);}
+.piece.b{color:#3B3345;text-shadow:0 1px 1px rgba(255,255,255,.35);}
+.square.sel{outline:4px solid #7FB6F5;outline-offset:-4px;}
+.square.lastmove::after{content:"";position:absolute;inset:0;background:rgba(255,235,140,.55);pointer-events:none;}
+.square.incheck::after{content:"";position:absolute;inset:0;background:rgba(255,110,110,.55);pointer-events:none;}
+.square .dot{position:absolute;width:26%;height:26%;border-radius:50%;background:rgba(90,140,90,.5);pointer-events:none;}
+.square .cap-ring{position:absolute;inset:6%;border-radius:50%;border:5px solid rgba(90,140,90,.55);pointer-events:none;}
+.square .coord{position:absolute;font-size:11px;font-weight:700;opacity:.65;pointer-events:none;}
+.coord.rank{top:2px;left:4px;} .coord.file{bottom:2px;right:5px;}
+.square.light .coord{color:#a07c4f;} .square.dark .coord{color:#f6e7c8;}
+.tray{display:flex;flex-wrap:wrap;gap:2px;min-height:34px;align-items:center;font-size:24px;margin:6px 0;}
+.movelist{background:#FBF7EF;border-radius:14px;padding:10px 14px;max-height:150px;overflow-y:auto;font-size:15px;margin:8px 0;}
+.movelist table{width:100%;border-collapse:collapse;} .movelist td{padding:3px 6px;}
+/* quiz */
+.choice{display:block;width:100%;text-align:left;background:var(--white);border:3px solid transparent;
+  border-radius:16px;padding:16px;font-size:18px;font-weight:600;color:var(--ink);margin:10px 0;cursor:pointer;min-height:60px;}
+.choice:active{transform:scale(.98);}
+.choice.correct{border-color:#6FCF97;background:#E9F9EF;}
+.choice.wrong{border-color:#F19999;background:#FDECEC;}
+.feedback{border-radius:16px;padding:16px;font-size:17px;margin:12px 0;font-weight:600;}
+.feedback.good{background:var(--mint);} .feedback.try{background:var(--peach);}
+/* misc */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+@media(max-width:640px){.grid2{grid-template-columns:1fr;}}
+.badge{display:inline-block;background:var(--lavender);border-radius:999px;padding:8px 16px;margin:4px;font-weight:700;font-size:15px;}
+.badge.gold{background:var(--butter);}
+.streak{display:inline-flex;align-items:center;gap:6px;background:#FFE9D6;border-radius:999px;padding:8px 16px;font-weight:800;}
+input[type=text],input[type=number],input[type=tel]{font-size:20px;padding:16px;border-radius:16px;border:3px solid #E7DFD2;
+  width:100%;margin:8px 0;background:#fff;color:var(--ink);font-family:inherit;}
+input:focus{outline:none;border-color:#B79CED;}
+.code-big{font-size:40px;font-weight:800;letter-spacing:10px;background:var(--white);border-radius:18px;
+  padding:18px;text-align:center;box-shadow:var(--shadow);margin:14px 0;font-family:ui-monospace,monospace;}
+.pinrow{display:flex;gap:10px;justify-content:center;}
+.pinrow input{width:64px;text-align:center;font-size:28px;}
+table.stats{width:100%;border-collapse:collapse;font-size:16px;}
+table.stats td,table.stats th{padding:10px 8px;border-bottom:2px solid #F1EAE0;text-align:left;}
+table.stats th{color:var(--ink-soft);}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;
+  padding:14px 24px;border-radius:999px;font-weight:700;font-size:17px;opacity:0;transition:all .3s;z-index:99;pointer-events:none;max-width:90vw;text-align:center;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+#confetti{position:fixed;inset:0;pointer-events:none;z-index:98;overflow:hidden;}
+.confetti-piece{position:absolute;top:-20px;width:12px;height:18px;border-radius:3px;animation:fall linear forwards;}
+@keyframes fall{to{transform:translateY(110vh) rotate(720deg);}}
+.coach-card{background:linear-gradient(135deg,var(--lavender),var(--sky));border-radius:var(--radius);
+  padding:18px;box-shadow:var(--shadow);margin:14px 0;}
+.coach-card .who{font-weight:800;font-size:17px;margin-bottom:6px;}
+.progressbar{height:14px;background:#EFE7D8;border-radius:999px;overflow:hidden;margin:8px 0;}
+.progressbar>div{height:100%;background:linear-gradient(90deg,#FFC98B,#FF9E7D);border-radius:999px;transition:width .4s;}
+.diff-pick{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;}
+.diff-btn{border:3px solid transparent;background:var(--white);border-radius:14px;padding:12px 14px;font-weight:700;
+  cursor:pointer;min-height:56px;box-shadow:var(--shadow);font-size:15px;}
+.diff-btn.sel{border-color:#B79CED;background:var(--lavender);}
+.lobby-code{font-size:52px;font-weight:800;letter-spacing:8px;text-align:center;background:var(--butter);
+  border-radius:18px;padding:16px;margin:12px 0;}
+.tabs{display:flex;gap:8px;margin:10px 0;flex-wrap:wrap;}
+.tab{border:none;background:#F1EDE6;border-radius:999px;padding:12px 20px;font-weight:700;font-size:16px;cursor:pointer;min-height:48px;}
+.tab.sel{background:var(--ink);color:#fff;}
+.kv{display:flex;justify-content:space-between;padding:8px 0;border-bottom:2px solid #F4EEE2;font-size:16px;}
+.kv b{font-size:17px;}
+.hint-box{background:var(--sky);border-radius:14px;padding:14px 16px;margin:10px 0;font-size:16px;}
+.big-emoji{font-size:54px;}
+.promo-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0;}
+.promo-grid button{font-size:44px;background:var(--white);border:3px solid #E7DFD2;border-radius:16px;padding:10px;cursor:pointer;min-height:76px;}
+</style>
+</head>
+<body>
+<div id="app">
+<!-- ============================ 2. HTML SHELL ============================== -->
+<div id="view"></div>
+<div id="toast" class="toast"></div>
+<div id="confetti"></div>
+<noscript><div class="card center"><h2>Chess Learning App</h2><p>Please turn on JavaScript to play and learn chess.</p></div></noscript>
+
+<!-- Firebase compat SDKs (pinned) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<!-- chess.js (pinned) — move rules & validation -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.13.4/chess.min.js"></script>
+
+<script>
+/* ============================ 3A. CONFIG =================================
+   >>> GROWN-UPS: FILL THIS IN <<<
+   1. Create your project at console.firebase.google.com (neutral name!)
+   2. Add a Web app, enable Anonymous sign-in, create a Realtime Database
+   3. Paste the values from your firebaseConfig here, replacing the
+      PASTE_YOUR_* placeholders. Keep the quotes.
+   The apiKey below is public by design (it only identifies the project);
+   your data is protected by the database security rules + family code. */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBYOz_JnZEI3ayEIsfcZ5xewQBUihJ-KPk",
+  authDomain: "family-chess-app.firebaseapp.com",
+  databaseURL: "https://family-chess-app-default-rtdb.firebaseio.com",
+  projectId: "family-chess-app",
+  appId: "1:74203122326:web:35036c3b1e57a6bb2b90b7"
+};
+const CONFIG_OK = FIREBASE_CONFIG.apiKey.indexOf("PASTE_YOUR_") !== 0;
+
+/* ============================ 3B. GLOBALS & UTILS ======================== */
+const $ = (sel, el) => (el||document).querySelector(sel);
+const $$ = (sel, el) => Array.from((el||document).querySelectorAll(sel));
+const view = $("#view");
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+let DB = null;                 // firebase.database() once initialised
+let FAM = null;                // family code string
+let PROFILE = null;            // current profile object {id,name,age,color,role}
+let PROFILES = {};             // all profiles, keyed by id
+let COACH = [];                // coaching directives for current profile
+let NAV = [];                  // breadcrumb stack for back button
+let LIVE_UNSUBS = [];          // firebase listeners to detach on nav
+
+const LS_FAM = "cla_family_code";
+const LS_PROFILE = "cla_profile_id";
+const LS_PINOK = "cla_parent_ok";
+
+function toast(msg, ms){
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove("show"), ms||2600);
+}
+function rnd(n){ const c="ABCDEFGHJKMNPQRSTUVWXYZ23456789"; let s=""; for(let i=0;i<n;i++) s+=c[Math.floor(Math.random()*c.length)]; return s; }
+function rid(n){ const c="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"; let s=""; for(let i=0;i<(n||24);i++) s+=c[Math.floor(Math.random()*c.length)]; return s; }
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function hashPin(pin){ let h=0; for(let i=0;i<pin.length;i++){ h=((h<<5)-h+pin.charCodeAt(i))|0; } return "p"+(h>>>0).toString(36); }
+function confetti(n){
+  const box = $("#confetti"); const colors=["#FFB59E","#BFE3C6","#DCCFF5","#A9D3F2","#FFE9A8","#FFC9D6"];
+  for(let i=0;i<(n||80);i++){
+    const d=document.createElement("div"); d.className="confetti-piece";
+    d.style.left=Math.random()*100+"vw"; d.style.background=colors[i%colors.length];
+    d.style.animationDuration=(2.2+Math.random()*2.2)+"s"; d.style.animationDelay=(Math.random()*0.6)+"s";
+    d.style.transform="rotate("+Math.random()*360+"deg)";
+    box.appendChild(d); setTimeout(()=>d.remove(),5200);
+  }
+}
+const PRAISE = ["Brilliant!","Amazing thinking!","You did it!","Superstar move!","Wow, well played!","Clever, clever!","Champion thinking!"];
+const TRYAGAIN = ["Good try — let's look together.","Almost! One more look.","Nice effort — here's a hint.","That's okay, mistakes are how we learn!"];
+function praise(){ return PRAISE[Math.floor(Math.random()*PRAISE.length)]; }
+function tryAgain(){ return TRYAGAIN[Math.floor(Math.random()*TRYAGAIN.length)]; }
+function avatarHTML(p, size){
+  const initial = esc((p.name||"?").trim().charAt(0).toUpperCase());
+  return `<span class="avatar" style="background:${esc(p.color||"#B79CED")};${size?`width:${size}px;height:${size}px;font-size:${Math.round(size*0.55)}px;`:""}">${initial}</span>`;
+}
+function starsHTML(n){ let s=""; for(let i=0;i<3;i++) s+= i<n?"★":"☆"; return `<span class="stars">${s}</span>`; }
+
+/* ---- tiny db helpers (all paths under /families/{FAM}) ---- */
+function ref(path){ return DB.ref("families/"+FAM+"/"+path); }
+function dbGet(path){ return ref(path).once("value").then(s=>s.val()); }
+function dbSet(path, val){ return ref(path).set(val); }
+function dbUpdate(path, val){ return ref(path).update(val); }
+function dbPush(path, val){ return ref(path).push(val); }
+async function logActivity(type, detail){
+  if(!PROFILE) return;
+  try{ await dbPush(`activities/${PROFILE.id}`, {type, detail:detail||"", createdAt:Date.now()}); }catch(e){}
+}
+
+/* ============================ 3C. NAVIGATION ============================= */
+function go(screen, arg, push=true){
+  if(push && NAV[NAV.length-1] !== screen) NAV.push(screen);
+  render(screen, arg);
+}
+function back(){
+  LIVE_UNSUBS.forEach(u=>{try{u();}catch(e){}}); LIVE_UNSUBS=[];
+  NAV.pop();
+  const prev = NAV.pop() || (PROFILE ? "home" : "profiles");
+  render(prev);
+}
+function topbar(title, showBack=true){
+  const chip = PROFILE
+    ? `<div class="profile-chip">${avatarHTML(PROFILE,32)}<span>${esc(PROFILE.name)}</span></div>` : "";
+  return `<div class="topbar">${showBack?`<button class="backbtn" onclick="back()">‹</button>`:""}<h2 style="margin:0">${title}</h2>${chip}</div>`;
+}
+function render(screen, arg){
+  LIVE_UNSUBS.forEach(u=>{try{u();}catch(e){}}); LIVE_UNSUBS=[];
+  window.scrollTo(0,0);
+  ({gate:renderGate, profiles:renderProfiles, home:renderHome, lesson:renderLesson,
+    quiz:renderQuiz, puzzles:renderPuzzles, play:renderPlay, live:renderLiveLobby,
+    livegame:renderLiveGameSafe, playgame:renderPlayGameSafe, passplay:renderPassPlaySafe,
+    parent:renderParent}[screen]||renderGate)(arg);
+}
+function renderLiveGameSafe(){ if(LG&&LG.data) drawLiveBoard(); else render("live"); }
+function renderPlayGameSafe(){ if(PG&&PG.game) drawPlayGame(); else render("play"); }
+function renderPassPlaySafe(){ if(PP&&PP.game) drawPassPlay(); else render("live"); }
+
+/* ============================ 3D. BOOT =================================== */
+async function boot(){
+  if(!CONFIG_OK){ renderSetupNeeded(); return; }
+  if(typeof firebase==="undefined"){ renderNetError("Could not load the pieces of the app. Check your internet and reload."); return; }
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    DB = firebase.database();
+    await firebase.auth().signInAnonymously();
+  }catch(e){ renderNetError("Could not connect. Check your internet and reload."); return; }
+  if(typeof Chess==="undefined"){ renderNetError("The chess rules did not load. Check your internet and reload."); return; }
+  const savedFam = localStorage.getItem(LS_FAM);
+  if(savedFam){
+    const fam = await DB.ref("families/"+savedFam+"/meta").once("value").then(s=>s.val()).catch(()=>null);
+    if(fam){ FAM = savedFam; await loadProfiles(); return enterWithSavedProfile(); }
+    localStorage.removeItem(LS_FAM);
+  }
+  NAV=["gate"]; render("gate");
+}
+function renderSetupNeeded(){
+  view.innerHTML = `<div class="card peach center" style="margin-top:40px">
+    <div class="big-emoji">🔧</div>
+    <h1>Almost ready!</h1>
+    <p>A grown-up needs to finish one tiny setup step: paste the Firebase
+    project values into <b>FIREBASE_CONFIG</b> at the top of this file
+    (it says <b>PASTE_YOUR_…</b> right now). Then reload this page.</p>
+    <p class="muted">Kids: ask a grown-up for help — you'll be playing in minutes!</p></div>`;
+}
+function renderNetError(msg){
+  view.innerHTML = `<div class="card rose center" style="margin-top:40px">
+    <div class="big-emoji">🌐</div><h1>Oh no!</h1><p>${esc(msg)}</p>
+    <button class="btn primary big" onclick="location.reload()">Try again</button></div>`;
+}
+async function loadProfiles(){
+  const v = await dbGet("profiles");
+  PROFILES = v||{};
+}
+async function enterWithSavedProfile(){
+  const pid = localStorage.getItem(LS_PROFILE);
+  if(pid && PROFILES[pid]){ await loginProfile(pid, false); }
+  else { NAV=["profiles"]; render("profiles"); }
+}
+
+/* ============================ 3E. FAMILY GATE ============================
+   IMPORTANT: kids' names never appear anywhere before this gate. */
+function renderGate(){
+  view.innerHTML = `
+  <div class="card peach center" style="margin-top:30px">
+    <div class="big-emoji">♞</div>
+    <h1>Chess Learning App</h1>
+    <p>Learn chess step by step, earn stars, and play games — let's go!</p>
+  </div>
+  <div class="card">
+    <h2>Is this a new family, or joining one?</h2>
+    <button class="btn primary big" onclick="gateCreate()">✨ Create our family <span class="muted" style="font-weight:400">(grown-up)</span></button>
+    <button class="btn sky big" onclick="gateJoin()">🔑 Join with a family code</button>
+  </div>`;
+}
+function gateCreate(){
+  view.innerHTML = topbar("Family setup", false) + `
+  <div class="card mint">
+    <h2>Grown-up setup</h2>
+    <p>First, let's create your parent profile and a secret 4-digit PIN for the parent dashboard.</p>
+    <label><b>Your name</b></label>
+    <input type="text" id="pname" placeholder="e.g. Akshay" maxlength="30" autocomplete="off">
+    <label><b>Parent PIN (4 digits)</b></label>
+    <input type="tel" id="ppin" placeholder="••••" maxlength="4" inputmode="numeric" autocomplete="off">
+    <button class="btn primary big" onclick="doCreateFamily()">Create family ♞</button>
+  </div>`;
+  $("#pname").focus();
+}
+async function doCreateFamily(){
+  const name = ($("#pname").value||"").trim() || "Parent";
+  const pin = ($("#ppin").value||"").trim();
+  if(!/^\d{4}$/.test(pin)){ toast("Please choose a 4-digit PIN."); return; }
+  const code = rid(24);
+  FAM = code;
+  try{
+    const pKid1 = dbPush("profiles", {name:"Ria", age:7, color:"#E66A55", role:"kid", createdAt:Date.now()}).key;
+    const pKid2 = dbPush("profiles", {name:"Aarika", age:9, color:"#2F715D", role:"kid", createdAt:Date.now()}).key;
+    const pPar  = dbPush("profiles", {name, color:"#7A6FF0", role:"parent", createdAt:Date.now()}).key;
+    await dbSet("meta", {parentPinHash: hashPin(pin), createdAt: Date.now()});
+    for(const pid of [pKid1,pKid2]){
+      await dbSet(`progress/${pid}/skill`, {level:1, xp:0});
+      await dbSet(`progress/${pid}/puzzleRating`, 400);
+      await dbSet(`progress/${pid}/streak`, {count:0, lastDay:""});
+    }
+    await loadProfiles();
+  }catch(e){ toast("Could not create family — check your connection."); FAM=null; return; }
+  localStorage.setItem(LS_FAM, code);
+  view.innerHTML = topbar("Family created!", false) + `
+  <div class="card butter center">
+    <h2>Your family code</h2>
+    <p>On the <b>other iPad</b>, choose <b>Join with a family code</b> and type this in:</p>
+    <div class="code-big">${esc(code)}</div>
+    <p class="muted">Keep this code in the family, like a Wi-Fi password.</p>
+    <button class="btn primary big" onclick="NAV=['profiles'];render('profiles')">Continue →</button>
+  </div>`;
+}
+function gateJoin(){
+  view.innerHTML = topbar("Join family", false) + `
+  <div class="card sky">
+    <h2>Enter your family code</h2>
+    <p class="muted">Ask a grown-up for the 24-letter code from their iPad.</p>
+    <input type="text" id="fcode" placeholder="Type the code here" maxlength="24" autocomplete="off"
+      style="text-transform:uppercase;letter-spacing:2px;font-family:ui-monospace,monospace;">
+    <button class="btn primary big" onclick="doJoinFamily()">Join ♞</button>
+  </div>`;
+}
+async function doJoinFamily(){
+  const code = (($("#fcode").value||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,""));
+  if(code.length < 20){ toast("That code looks too short — check it and try again."); return; }
+  const meta = await DB.ref("families/"+code+"/meta").once("value").then(s=>s.val()).catch(()=>null);
+  if(!meta){ toast("Couldn't find that family. Check the code and your connection."); return; }
+  FAM = code; localStorage.setItem(LS_FAM, code);
+  await loadProfiles();
+  NAV=["profiles"]; render("profiles");
+}
+
+/* ============================ 3F. PROFILES =============================== */
+function renderProfiles(){
+  const kids = Object.entries(PROFILES).filter(([,p])=>p.role!=="parent");
+  const parents = Object.entries(PROFILES).filter(([,p])=>p.role==="parent");
+  view.innerHTML = `
+  <div class="center" style="margin:18px 0 6px"><div class="big-emoji">♞</div>
+  <h1>Who is playing?</h1></div>
+  ${kids.map(([id,p])=>`
+    <div class="lesson-row" onclick="tapProfile('${id}')">
+      ${avatarHTML(p,52)}
+      <div class="lesson-info"><div class="t">${esc(p.name)}</div>
+      <div class="s">${p.age?("Age "+esc(p.age)+" · "):""}Tap to play!</div></div><div style="font-size:26px">›</div>
+    </div>`).join("")}
+  <div class="card lavender">
+    <h3>Grown-ups</h3>
+    ${parents.map(([id,p])=>`
+      <div class="lesson-row" onclick="tapParent('${id}')">${avatarHTML(p,52)}
+      <div class="lesson-info"><div class="t">${esc(p.name)}</div><div class="s">Parent dashboard</div></div>
+      <div style="font-size:26px">›</div></div>`).join("")}
+    <button class="btn ghost" onclick="addProfile()">＋ Add a profile</button>
+  </div>
+  <p class="center muted">Each iPad remembers its player — Ria stays logged in on hers, Aarika on his.</p>`;
+}
+async function tapProfile(pid){
+  await loginProfile(pid, true);
+}
+async function loginProfile(pid, remember){
+  PROFILE = Object.assign({id:pid}, PROFILES[pid]);
+  if(remember) localStorage.setItem(LS_PROFILE, pid);
+  await loadCoaching();
+  touchStreak(true);
+  NAV=["home"]; render("home");
+}
+function tapParent(pid){
+  const p = PROFILES[pid];
+  view.innerHTML = topbar("Parent sign-in") + `
+  <div class="card lavender center">
+    ${avatarHTML(p,64)}<h2>Hi ${esc(p.name)}!</h2>
+    <p>Enter your 4-digit PIN to open the parent dashboard.</p>
+    <div class="pinrow">
+      <input type="tel" maxlength="1" inputmode="numeric" class="pind"><input type="tel" maxlength="1" inputmode="numeric" class="pind">
+      <input type="tel" maxlength="1" inputmode="numeric" class="pind"><input type="tel" maxlength="1" inputmode="numeric" class="pind">
+    </div>
+    <button class="btn primary big" onclick="checkParentPin('${pid}')">Open dashboard</button>
+  </div>`;
+  const ds = $$(".pind");
+  ds.forEach((d,i)=>{ d.addEventListener("input",()=>{ d.value=d.value.replace(/\D/g,"").slice(0,1); if(d.value&&i<3) ds[i+1].focus(); }); });
+  ds[0].focus();
+}
+async function checkParentPin(pid){
+  const pin = $$(".pind").map(d=>d.value).join("");
+  const meta = await dbGet("meta");
+  if(meta && meta.parentPinHash === hashPin(pin)){
+    localStorage.setItem(LS_PINOK, "1");
+    PROFILE = Object.assign({id:pid}, PROFILES[pid]);
+    NAV=["parent"]; render("parent");
+  } else toast("Hmm, that PIN didn't match. Try again!");
+}
+function addProfile(){
+  view.innerHTML = topbar("Add a profile") + `
+  <div class="card mint">
+    <h2>New player</h2>
+    <p class="muted">A grown-up's PIN is needed to add someone new.</p>
+    <label><b>Name</b></label><input type="text" id="npname" maxlength="30" autocomplete="off">
+    <label><b>Age (for kids — leave blank for grown-ups)</b></label>
+    <input type="number" id="npage" min="3" max="99" placeholder="">
+    <label><b>Parent PIN</b></label>
+    <input type="tel" id="nppin" maxlength="4" inputmode="numeric" placeholder="••••">
+    <div class="diff-pick" id="npcolor"></div>
+    <button class="btn primary big" onclick="doAddProfile()">Add player</button>
+  </div>`;
+  const colors=["#E66A55","#2F715D","#7A6FF0","#E8A93D","#5BA8CF","#C86FA0","#6FCF97","#FF8E6E"];
+  $("#npcolor").innerHTML = colors.map((c,i)=>`<button class="diff-btn${i===0?" sel":""}" data-c="${c}" onclick="pickColor(this)"><span class="avatar" style="background:${c};width:30px;height:30px;font-size:15px">😊</span></button>`).join("");
+}
+function pickColor(el){ $$("#npcolor .diff-btn").forEach(b=>b.classList.remove("sel")); el.classList.add("sel"); }
+async function doAddProfile(){
+  const name=(($("#npname").value)||"").trim(); const age=parseInt($("#npage").value||"0",10);
+  const pin=(($("#nppin").value)||"").trim();
+  const color=($("#npcolor .sel")||{}).dataset ? $("#npcolor .sel").dataset.c : "#7A6FF0";
+  if(!name){ toast("Please type a name."); return; }
+  const meta = await dbGet("meta");
+  if(!meta || meta.parentPinHash!==hashPin(pin)){ toast("That PIN didn't match."); return; }
+  const role = age>=18||age===0 ? (age===0?"parent":"kid") : "kid";
+  const key = (await dbPush("profiles",{name, age:age||null, color, role, createdAt:Date.now()})).key;
+  if(role==="kid"){ await dbSet(`progress/${key}/skill`,{level:1,xp:0}); await dbSet(`progress/${key}/puzzleRating`,400); await dbSet(`progress/${key}/streak`,{count:0,lastDay:""}); }
+  await loadProfiles(); toast(name+" joined the family!"); render("profiles");
+}
+
+/* ---- coaching directives (written by Stella) ---- */
+async function loadCoaching(){
+  COACH = [];
+  try{
+    const v = await dbGet(`coaching/${PROFILE.id}/directives`);
+    if(v) COACH = Object.entries(v).map(([id,d])=>Object.assign({id},d)).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  }catch(e){}
+  // apply latest difficulty directive as a recommendation
+  const diff = COACH.find(c=>c.kind==="difficulty" && !c.acknowledgedAt);
+  PROFILE._coachAI = diff && diff.detail && diff.detail.aiLevel ? Math.max(1,Math.min(5,diff.detail.aiLevel)) : null;
+  PROFILE._coachFocus = (COACH.find(c=>c.kind==="focus" && !c.acknowledgedAt)||{}).text || null;
+}
+async function ackCoaching(id){
+  try{ await dbUpdate(`coaching/${PROFILE.id}/directives/${id}`, {acknowledgedAt:Date.now()}); }catch(e){}
+  COACH = COACH.filter(c=>c.id!==id);
+  render("home");
+}
+function coachCardHTML(){
+  const fresh = COACH.filter(c=>!c.acknowledgedAt).slice(0,2);
+  if(!fresh.length) return "";
+  return `<div class="coach-card"><div class="who">💬 Coach Stella says</div>` +
+    fresh.map(c=>`<p style="margin:6px 0">${esc(c.text)}</p>
+      <button class="btn ghost" style="font-size:15px;padding:10px 18px;min-height:44px" onclick="ackCoaching('${c.id}')">Got it!</button>`).join("") +
+    `</div>`;
+}
+async function touchStreak(silent){
+  try{
+    const s = (await dbGet(`progress/${PROFILE.id}/streak`)) || {count:0,lastDay:""};
+    const t = todayStr();
+    if(s.lastDay !== t){
+      const y = new Date(Date.now()-864e5).toISOString().slice(0,10);
+      s.count = (s.lastDay===y) ? (s.count||0)+1 : 1;
+      s.lastDay = t;
+      await dbSet(`progress/${PROFILE.id}/streak`, s);
+      if(!silent && s.count>1) setTimeout(()=>toast(`🔥 ${s.count}-day streak! Keep it up!`), 800);
+    }
+    PROFILE._streak = s.count||1;
+  }catch(e){ PROFILE._streak = 1; }
+}
+
+/* ============================ 3G. CURRICULUM ============================= */
+const LESSONS = [
+{ id:"board", title:"The Chessboard", sub:"Squares, colors & coordinates",
+  steps:[
+    {t:"say", text:"Welcome, future champion! Every chess adventure starts with the board. It's 8 squares by 8 squares — 64 in all!"},
+    {t:"board", fen:"8/8/8/8/8/8/8/8 w - - 0 1", hl:["a1","h1","a8","h8"], text:"See the colors? Light and dark squares take turns. And here's a secret: the square on YOUR right corner is always light. That's called “white on right”!"},
+    {t:"say", text:"Squares have names! Files (up-down lines) are letters a to h. Ranks (sideways lines) are numbers 1 to 8. Together they name every square — like e4, the most famous square in chess!"},
+    {t:"tap", prompt:"Tap the square e4!", fen:"8/8/8/8/8/8/8/8 w - - 0 1", targets:["e4"], after:"You found e4! Great eyes!"},
+    {t:"tap", prompt:"Now tap d5!", fen:"8/8/8/8/8/8/8/8 w - - 0 1", targets:["d5"], after:"D5! You're reading the board like a pro."},
+    {t:"say", text:"The four squares in the very middle — d4, d5, e4, e5 — are the CENTER. The player who controls the center usually wins. Remember that!"},
+  ],
+  quiz:[
+    {q:"How many squares are on a chessboard?", choices:["48","64","72","100"], answer:1, explain:"8 × 8 = 64 squares!"},
+    {q:"What color is the square on your right corner?", choices:["Dark","Light","It changes","Red"], answer:1, explain:"“White on right” — the h1 square is always light!"},
+    {q:"Which of these is a center square?", choices:["a1","h8","e4","b2"], answer:2, explain:"d4, d5, e4, e5 are the four center squares."},
+  ]},
+{ id:"pawn", title:"Pawns", sub:"The brave little soldiers",
+  steps:[
+    {t:"say", text:"Meet the PAWN! ♟️ You start with 8 of them. They're small, but don't be fooled — pawns can become queens!"},
+    {t:"board", fen:"8/8/8/8/8/8/4P3/8 w - - 0 1", hl:["e2","e3","e4"], text:"Pawns march straight forward, one square at a time. From their starting square they MAY jump two squares — but only once!"},
+    {t:"move", prompt:"Move the pawn! Tap it, then tap a glowing square.", fen:"8/8/8/8/8/8/4P3/8 w - - 0 1", from:"e2", targets:["e3","e4"], after:"March, march! Pawns never move backwards — they're brave like that."},
+    {t:"board", fen:"8/8/8/3p4/4P3/8/8/8 w - - 0 1", hl:["d5"], text:"Pawns capture DIFFERENTLY than they move: one square diagonally forward. See the black pawn? Our pawn can capture it!"},
+    {t:"move", prompt:"Capture the black pawn!", fen:"8/8/8/3p4/4P3/8/8/8 w - - 0 1", from:"e4", targets:["d5"], after:"Gotcha! Diagonal captures — the pawn's sneaky trick."},
+    {t:"board", fen:"8/4P3/8/8/8/8/8/4K2k w - - 0 1", hl:["e8"], text:"If a pawn reaches the far end of the board, it gets PROMOTED — it can become a queen, rook, bishop, or knight! Almost everyone picks the queen. 👑"},
+    {t:"move", prompt:"March to the end and become a queen!", fen:"8/4P3/8/8/8/8/8/4K2k w - - 0 1", from:"e7", targets:["e8"], after:"Crowned! A pawn that dreams big becomes a queen."},
+  ],
+  quiz:[
+    {q:"How does a pawn move (not capture)?", choices:["Diagonally","Straight forward","Sideways","In an L"], answer:1, explain:"Straight forward, one square (two from the start)."},
+    {q:"How does a pawn capture?", choices:["Straight forward","Two squares","One square diagonally","It can't capture"], answer:2, explain:"One square diagonally forward — sneaky!"},
+    {q:"What happens when a pawn reaches the far end?", choices:["It disappears","It gets promoted","It moves back","Game over"], answer:1, explain:"Promotion! Usually to a queen. 👑"},
+  ]},
+{ id:"rook", title:"Rooks", sub:"The castle towers",
+  steps:[
+    {t:"say", text:"The ROOK ♜ looks like a castle tower. It's worth 5 points and LOVES straight lines!"},
+    {t:"board", fen:"8/8/8/8/3R4/8/8/4K2k w - - 0 1", hl:["d1","d2","d3","d5","d6","d7","d8","a4","b4","c4","e4","f4","g4","h4"], text:"Rooks zoom up, down, left, and right — as far as they want until something blocks them!"},
+    {t:"move", prompt:"Zoom the rook to a glowing square!", fen:"8/8/8/8/3R4/8/8/4K2k w - - 0 1", from:"d4", targets:["d8","h4","a4","d1"], after:"Vroom! Rooks control whole lines — that's real power."},
+    {t:"say", text:"Rooks are happiest on OPEN files (lines with no pawns) and on the 7th rank, gobbling enemy pawns. Remember: rooks belong behind passed pawns!"},
+  ],
+  quiz:[
+    {q:"How does a rook move?", choices:["Diagonally","In an L","Straight lines any distance","One square only"], answer:2, explain:"Up, down, left, right — as far as it likes!"},
+    {q:"How many points is a rook worth?", choices:["3","5","9","1"], answer:1, explain:"A rook is worth 5 points."},
+    {q:"Where are rooks happiest?", choices:["In corners","On open files","Next to the king","Off the board"], answer:1, explain:"Open files — long empty lines to zoom along!"},
+  ]},
+{ id:"knight", title:"Knights", sub:"The tricky jumpers",
+  steps:[
+    {t:"say", text:"The KNIGHT ♞ is the trickiest piece in chess! It jumps in an L shape — and it can JUMP OVER other pieces!"},
+    {t:"board", fen:"8/8/8/8/3N4/8/8/4K2k w - - 0 1", hl:["c6","e6","f5","f3","e2","c2","b3","b5"], text:"Two squares one way, then one square sideways — that's the L! Count the glowing squares: a knight in the middle attacks 8 squares!"},
+    {t:"move", prompt:"Jump the knight to a glowing square!", fen:"8/8/8/8/3N4/8/8/4K2k w - - 0 1", from:"d4", targets:["e6","f5","c6","b5"], after:"Boing! Knights are the only piece that jumps over others."},
+    {t:"say", text:"Knight tip: knights are strongest in the CENTER. A knight on the rim is dim — “a knight on the rim is grim”!"},
+  ],
+  quiz:[
+    {q:"How does a knight move?", choices:["Straight lines","Diagonally","An L shape, jumping","One square"], answer:2, explain:"L shape — and it jumps over pieces!"},
+    {q:"Can a knight jump over other pieces?", choices:["Yes!","No","Only pawns","Only backwards"], answer:0, explain:"Yes! The knight is the only jumper."},
+    {q:"Where is a knight strongest?", choices:["In the corner","On the rim","In the center","Off the board"], answer:2, explain:"Center knights attack 8 squares!"},
+  ]},
+{ id:"bishop", title:"Bishops", sub:"The diagonal dashers",
+  steps:[
+    {t:"say", text:"The BISHOP ♝ glides on diagonals — and it NEVER leaves its color! You start with one light-squared and one dark-squared bishop."},
+    {t:"board", fen:"8/8/8/8/3B4/8/8/4K2k w - - 0 1", hl:["a1","b2","c3","e5","f6","g7","h8","c5","b6","a7","e3","f2","g1"], text:"Diagonals only, as far as it wants! This bishop lives on dark squares and will never touch a light one."},
+    {t:"move", prompt:"Glide the bishop to a glowing square!", fen:"8/8/8/8/3B4/8/8/4K2k w - - 0 1", from:"d4", targets:["h8","a1","g7","a7"], after:"Whoosh! Bishops are long-range snipers."},
+    {t:"say", text:"Two bishops together are called “the bishop pair” — they cover every color and are super strong in open positions!"},
+  ],
+  quiz:[
+    {q:"How does a bishop move?", choices:["Straight","Diagonally","L shape","One square"], answer:1, explain:"Diagonals, any distance!"},
+    {q:"Can a bishop ever change square color?", choices:["Yes","No, never","After 10 moves","If it captures"], answer:1, explain:"Never! A dark-squared bishop stays dark forever."},
+    {q:"How many points is a bishop worth?", choices:["1","3","5","9"], answer:1, explain:"3 points — same as a knight."},
+  ]},
+{ id:"queen", title:"Queens", sub:"The superstar",
+  steps:[
+    {t:"say", text:"The QUEEN ♛ is the superstar — worth 9 points! She moves like a rook AND a bishop combined!"},
+    {t:"board", fen:"8/8/8/8/3Q4/8/8/4K2k w - - 0 1", hl:["d8","d1","a4","h4","h8","a1","g7","a7","g1"], text:"Straight lines AND diagonals! The queen is the most powerful piece — which is why you must keep her safe."},
+    {t:"move", prompt:"Move the queen anywhere glowing!", fen:"8/8/8/8/3Q4/8/8/4K2k w - - 0 1", from:"d4", targets:["d8","h4","h8","a4"], after:"The queen goes wherever she pleases!"},
+    {t:"say", text:"Queen tip: don't bring her out too early! If she wanders out alone, enemy pieces will chase her while developing. Develop knights and bishops first!"},
+  ],
+  quiz:[
+    {q:"How does the queen move?", choices:["Like a rook only","Like a bishop only","Like a rook AND bishop","Like a knight"], answer:2, explain:"Both! Straight lines and diagonals."},
+    {q:"How many points is the queen worth?", choices:["5","9","3","10"], answer:1, explain:"9 points — the most valuable piece!"},
+    {q:"When should the queen come out?", choices:["First move!","After knights & bishops develop","Never","Only to capture"], answer:1, explain:"Develop minor pieces first, then Her Majesty."},
+  ]},
+{ id:"king", title:"Kings", sub:"Protect the crown!",
+  steps:[
+    {t:"say", text:"The KING ♚ is the most IMPORTANT piece — but not the strongest. He waddles one square in any direction."},
+    {t:"board", fen:"8/8/8/8/8/8/8/3K4 w - - 0 1", hl:["c1","e1","c2","d2","e2"], text:"One square only — but in EVERY direction! The whole game is about keeping him safe."},
+    {t:"move", prompt:"Move the king to safety!", fen:"8/8/8/8/8/8/8/3K4 w - - 0 1", from:"d1", targets:["c1","e1","c2","d2","e2"], after:"Slow and steady! The king is precious cargo."},
+    {t:"say", text:"Golden rule: NEVER move your king where he could be captured! And in the endgame, when few pieces remain, the king becomes a brave fighter!"},
+  ],
+  quiz:[
+    {q:"How does the king move?", choices:["Any distance","One square any direction","L shape","Two squares"], answer:1, explain:"One square in any direction."},
+    {q:"What happens if your king is captured?", choices:["You lose a turn","The game ends — you lose","Nothing","You get a new king"], answer:1, explain:"Actually the game ends one step earlier — at checkmate, when the king CAN'T escape capture!"},
+    {q:"In the endgame the king should…", choices:["Hide forever","Become active and fight","Stay in the corner","Be sacrificed"], answer:1, explain:"With few pieces left, the king is a strong fighter!"},
+  ]},
+{ id:"setup", title:"Setup & Special Moves", sub:"Castling, promotion & en passant",
+  steps:[
+    {t:"say", text:"Time to set up a real battle! Back rank: rooks in the corners, then knights, then bishops — queen on HER color, king next to her. Pawns all across in front!"},
+    {t:"board", fen:"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", text:"“Queen on her color” — white queen starts on a light square, black queen on dark. White always moves first!"},
+    {t:"say", text:"Special move #1: CASTLING! If neither the king nor a rook has moved, no pieces between them, and the king isn't in check — the king hops two squares toward the rook, and the rook jumps over! It tucks your king to safety in ONE move."},
+    {t:"move", prompt:"Castle kingside! Move the king two squares.", fen:"r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1", from:"e1", targets:["g1"], after:"Castled! King safe, rook developed — two birds, one move!"},
+    {t:"say", text:"Special move #2: EN PASSANT (French for “in passing”). If an enemy pawn jumps two squares and lands BESIDE your pawn, you may capture it as if it moved only one! You must do it immediately — or the chance is gone!"},
+    {t:"move", prompt:"Capture en passant!", fen:"8/8/8/3Pp3/8/8/8/4K2k w - e6 0 1", from:"d5", targets:["e6"], after:"En passant! The sneakiest rule in chess — now YOU know it!"},
+  ],
+  quiz:[
+    {q:"In the starting position, the white queen goes on…", choices:["A dark square","A light square","Any square","e1"], answer:1, explain:"Queen on her color — white queen on light d1!"},
+    {q:"What is castling?", choices:["King moves 2, rook jumps over","Queen swap","Pawn jump","Resigning"], answer:0, explain:"King hops two toward the rook; rook jumps over. Safety + development!"},
+    {q:"When can you play en passant?", choices:["Anytime","Only on the move right after the pawn jumps","Only in the endgame","Never"], answer:1, explain:"Immediately or never — use it or lose it!"},
+  ]},
+{ id:"check", title:"Check, Mate & Stalemate", sub:"How games are won",
+  steps:[
+    {t:"say", text:"CHECK means your king is attacked! You MUST get out of check — move the king, block the attack, or capture the attacker."},
+    {t:"board", fen:"7k/8/8/8/8/8/8/R6K w - - 0 1", hl:["a8"], text:"See? Our rook is giving check! The black king must run. If there's NO escape — that's CHECKMATE, and the game is over!"},
+    {t:"move", prompt:"Deliver checkmate! (Ra8#)", fen:"6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", from:"a1", targets:["a8"], after:"CHECKMATE!! The king has nowhere to run. You win! 🏆"},
+    {t:"say", text:"Careful: STALEMATE is a trap! If it's your turn and you have NO legal moves but are NOT in check — it's a DRAW, even if you're winning! Always leave your opponent a move!"},
+    {t:"board", fen:"7k/8/6Q1/8/8/8/8/6K1 b - - 0 1", text:"Look: black to move, not in check, but the king can't move anywhere. STALEMATE — draw! Champions never stalemate a won game."},
+  ],
+  quiz:[
+    {q:"What must you do when in check?", choices:["Ignore it","Get out of check","Resign","Move any piece"], answer:1, explain:"Move the king, block, or capture — you must answer check!"},
+    {q:"What is checkmate?", choices:["The king is in check with no escape","A draw","Capturing the queen","50 moves"], answer:0, explain:"Check + no escape = checkmate = you win!"},
+    {q:"What is stalemate?", choices:["A win","No legal moves, not in check — a draw","Checkmate in 1","Losing on time"], answer:1, explain:"Stalemate = draw. Don't accidentally draw a won game!"},
+  ]},
+{ id:"tactics", title:"Tactics: Pins & Forks", sub:"Winning material like a wizard",
+  steps:[
+    {t:"say", text:"TACTICS are short tricks that win pieces! The two most common: PINS and FORKS. Learn these and you'll win so many games!"},
+    {t:"board", fen:"4k3/8/8/8/4r3/8/8/4R1K1 w - - 0 1", hl:["e4"], text:"A PIN: the black rook on e4 CAN'T move — it's pinned to its king by our rook! Pinned pieces are sitting ducks."},
+    {t:"tap", prompt:"Tap the pinned piece!", fen:"4k3/8/8/8/4r3/8/8/4R1K1 w - - 0 1", targets:["e4"], after:"Yes! Absolute pin — moving it would expose the king, which is illegal!"},
+    {t:"board", fen:"2r1k3/8/3N4/8/8/8/8/4K3 w - - 0 1", hl:["e8","c8"], text:"A FORK: our knight attacks TWO pieces at once — the king AND the rook! One moves, the other falls. Knights are fork wizards!"},
+    {t:"tap", prompt:"Tap both forked pieces!", fen:"2r1k3/8/3N4/8/8/8/8/4K3 w - - 0 1", targets:["e8","c8"], after:"Forked! When one piece attacks two, you win material!"},
+  ],
+  quiz:[
+    {q:"What is a pin?", choices:["A piece that can't move without exposing something valuable","A fast move","A draw","A promotion"], answer:0, explain:"Pinned pieces are stuck defending!"},
+    {q:"What is a fork?", choices:["Eating with a fork","One piece attacking two at once","Castling","A draw"], answer:1, explain:"One attacker, two targets — you win one of them!"},
+    {q:"Which piece is the most famous forker?", choices:["Pawn","Knight","King","Bishop"], answer:1, explain:"Knights fork in every direction!"},
+  ]},
+{ id:"openings", title:"Opening Principles", sub:"Start like a champion",
+  steps:[
+    {t:"say", text:"The OPENING is the first 10 moves. Champions follow 4 golden rules — learn them and you'll never be lost!"},
+    {t:"say", text:"Rule 1: CONTROL THE CENTER — play e4 or d4! Rule 2: DEVELOP knights and bishops toward the center!"},
+    {t:"say", text:"Rule 3: CASTLE EARLY to keep your king safe! Rule 4: DON'T move the same piece twice or bring the queen out too soon!"},
+    {t:"move", prompt:"Play the champion's first move: e4!", fen:"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", from:"e2", targets:["e4"], after:"e4! You control the center AND open lines for your queen and bishop!"},
+    {t:"board", fen:"rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2", text:"After 1.e4 e5 2.Nf3 — perfect! Pawn to center, knight developed toward the center, ready to castle. That's opening gold!"},
+  ],
+  quiz:[
+    {q:"What's the #1 opening rule?", choices:["Move the queen first","Control the center","Castle on move 1","Push all pawns"], answer:1, explain:"Center pawns first — e4 or d4!"},
+    {q:"Which pieces develop first?", choices:["Queen","Knights and bishops","Rooks","King"], answer:1, explain:"Knights and bishops toward the center!"},
+    {q:"Why castle early?", choices:["It looks cool","King safety + rook development","To attack","It's required"], answer:1, explain:"Safety first, champions!"},
+  ]},
+{ id:"endgame", title:"Basic Endgames", sub:"Finishing like a pro",
+  steps:[
+    {t:"say", text:"The ENDGAME: few pieces left. Now your KING becomes a brave fighter, and technique wins!"},
+    {t:"say", text:"King + Queen vs lone King is a guaranteed win. The method: 1) Use your queen to shrink the king's “box”, 2) bring your king close, 3) deliver checkmate!"},
+    {t:"board", fen:"k7/8/1QK5/8/8/8/8/8 w - - 0 1", hl:["b7"], text:"Watch the finish: our queen goes to b7 — CHECKMATE! The black king is trapped by our king and queen working together!"},
+    {t:"move", prompt:"Deliver the checkmate: Qb7#", fen:"k7/8/1QK5/8/8/8/8/8 w - - 0 1", from:"b6", targets:["b7"], after:"MATE! Queen and king, side by side — unstoppable! 🏆"},
+    {t:"say", text:"Endgame golden rules: activate your king, push passed pawns, and never stalemate a won position! You're officially tournament-ready material!"},
+  ],
+  quiz:[
+    {q:"In the endgame, your king should…", choices:["Keep hiding","March up and fight","Stay home","Be traded"], answer:1, explain:"The king becomes a powerful fighter!"},
+    {q:"With King + Queen vs King, you…", choices:["Can always force mate","Should offer a draw","Might lose","Need 50 moves"], answer:0, explain:"It's a forced win with the boxing technique!"},
+    {q:"What must you avoid in a winning endgame?", choices:["Checkmate","Stalemate","Captures","Checks"], answer:1, explain:"Stalemate draws — always give them a legal move until mate!"},
+  ]},
+];
+
+/* ============================ 3H. LESSON PLAYER ========================== */
+let LES = null; // {lesson, stepIdx}
+function lessonUnlocked(i){ return i===0; }
+async function lessonState(i){
+  const v = await dbGet(`progress/${PROFILE.id}/lessons/${LESSONS[i].id}`);
+  return v||null;
+}
+async function renderHome(){
+  const [lessonsDone, skill, streak] = await Promise.all([
+    dbGet(`progress/${PROFILE.id}/lessons`), dbGet(`progress/${PROFILE.id}/skill`),
+    dbGet(`progress/${PROFILE.id}/streak`)]);
+  const lvl = (skill&&skill.level)||1, xp=(skill&&skill.xp)||0;
+  const doneCount = lessonsDone ? Object.keys(lessonsDone).length : 0;
+  let rows = "";
+  for(let i=0;i<LESSONS.length;i++){
+    const st = lessonsDone && lessonsDone[LESSONS[i].id];
+    const unlocked = i===0 || (lessonsDone && lessonsDone[LESSONS[i-1].id] && lessonsDone[LESSONS[i-1].id].completed);
+    rows += `<div class="lesson-row${st&&st.completed?" done":""}${unlocked?"":" locked"}" ${unlocked?`onclick="startLesson(${i})"`:""}>
+      <div class="lesson-num">${st&&st.completed?"✓":(i+1)}</div>
+      <div class="lesson-info"><div class="t">${esc(LESSONS[i].title)}</div>
+      <div class="s">${esc(LESSONS[i].sub)}</div></div>
+      ${st&&st.stars?starsHTML(st.stars):(unlocked?"":"🔒")}
+    </div>`;
+  }
+  const badges = await earnedBadges();
+  view.innerHTML = topbar("Let's play chess!", false) + `
+  <div class="card peach">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      ${avatarHTML(PROFILE,56)}
+      <div><h2 style="margin:0">Hi ${esc(PROFILE.name)}! ♞</h2>
+      <div class="muted">Level ${lvl} · ${xp} XP ${PROFILE._streak>1?`· <span class="streak">🔥 ${PROFILE._streak}</span>`:""}</div></div>
+    </div>
+    <div class="progressbar"><div style="width:${Math.min(100,(xp%100))}%"></div></div>
+    ${PROFILE._coachFocus?`<div class="hint-box">🎯 Coach focus: <b>${esc(PROFILE._coachFocus)}</b></div>`:""}
+  </div>
+  ${coachCardHTML()}
+  ${badges.length?`<div class="card"><h3>Your badges</h3>${badges.map(b=>`<span class="badge gold">${esc(b)}</span>`).join("")}</div>`:""}
+  <div class="grid2">
+    <button class="btn mint big" onclick="go('puzzles')">🧩 Puzzles</button>
+    <button class="btn sky big" onclick="go('play')">🤖 Play computer</button>
+  </div>
+  <button class="btn lavender big" onclick="go('live')">👧🧒 Play family</button>
+  <h2>📚 Lessons <span class="muted" style="font-size:15px">${doneCount}/12 done</span></h2>
+  ${rows}
+  <div class="center" style="margin-top:14px">
+    <button class="btn ghost" onclick="switchProfile()">Switch player</button>
+  </div>`;
+}
+function switchProfile(){ localStorage.removeItem(LS_PROFILE); PROFILE=null; NAV=["profiles"]; render("profiles"); }
+function startLesson(i){ LES={lesson:LESSONS[i], idx:i, step:0}; NAV.push("lesson"); render("lesson"); }
+
+function renderLesson(){
+  const L = LES.lesson;
+  if(LES.step >= L.steps.length){ startQuiz(); return; }
+  const s = L.steps[LES.step];
+  const head = topbar(`Lesson ${LES.idx+1}: ${L.title}`) +
+    `<div class="progressbar"><div style="width:${Math.round(LES.step/L.steps.length*100)}%"></div></div>`;
+  if(s.t==="say"){
+    view.innerHTML = head + `<div class="card peach"><p style="font-size:19px">${esc(s.text)}</p>
+      <button class="btn primary big" onclick="LES.step++;render('lesson')">Next →</button></div>`;
+  } else if(s.t==="board"){
+    view.innerHTML = head + `<div class="card"><p style="font-size:18px">${esc(s.text)}</p>
+      <div class="board-wrap"><div class="board" id="lb"></div></div>
+      <button class="btn primary big" onclick="LES.step++;render('lesson')">Got it! →</button></div>`;
+    const g = new Chess(s.fen);
+    drawBoard($("#lb"), g, {highlights:arrayToHl(s.hl), interactive:false});
+  } else if(s.t==="tap"){
+    view.innerHTML = head + `<div class="card sky"><h2>${esc(s.prompt)}</h2>
+      <p class="muted">Tap the glowing square(s).</p>
+      <div class="board-wrap"><div class="board" id="lb"></div></div>
+      <div id="tapfb"></div></div>`;
+    const g = new Chess(s.fen);
+    const remaining = new Set(s.targets);
+    const hl = {}; s.targets.forEach(sq=>hl[sq]="hint");
+    drawBoard($("#lb"), g, {highlights:hl, interactive:true, onTap(sq){
+      if(remaining.has(sq)){ remaining.delete(sq); hl[sq]="good";
+        drawBoard($("#lb"), g, {highlights:hl, interactive:true, onTap:arguments.callee});
+        if(remaining.size===0){ $("#tapfb").innerHTML=`<div class="feedback good">${praise()} ${esc(s.after||"")}</div>`; confetti(40);
+          logActivity("practice", L.id+" tap"); setTimeout(()=>{LES.step++;render("lesson");},1400); }
+      } else { $("#tapfb").innerHTML=`<div class="feedback try">${tryAgain()} Look for the glowing square.</div>`; }
+    }});
+  } else if(s.t==="move"){
+    view.innerHTML = head + `<div class="card mint"><h2>${esc(s.prompt)}</h2>
+      <div class="board-wrap"><div class="board" id="lb"></div></div>
+      <div id="movefb"></div></div>`;
+    runLessonMove(s, L);
+  }
+}
+function arrayToHl(arr){ const o={}; (arr||[]).forEach(s=>o[s]="hint"); return o; }
+
+/* lesson interactive move: tap `from`, then a target; fallback accepts any legal move if targets illegal */
+function runLessonMove(s, L){
+  const g = new Chess(s.fen);
+  const el = $("#lb");
+  let sel = null;
+  const legalTargets = s.targets.filter(t => g.moves({square:s.from, verbose:true}).some(m=>m.to===t));
+  const acceptAny = legalTargets.length===0;
+  const targets = acceptAny ? g.moves({square:s.from, verbose:true}).map(m=>m.to) : legalTargets;
+  function draw(){
+    const dots = sel ? g.moves({square:sel, verbose:true}).map(m=>m.to) : [];
+    const hl = {}; targets.forEach(t=>{ if(sel) hl[t]="hint"; });
+    if(sel) hl[sel]="sel";
+    drawBoard(el, g, {highlights:hl, dots, interactive:true, onTap(sq){
+      if(!sel){
+        const pc = g.get(sq);
+        if(pc && pc.color===g.turn() && sq===s.from){ sel=sq; draw(); }
+        else { $("#movefb").innerHTML=`<div class="feedback try">${tryAgain()} Tap the piece we are learning about.</div>`; }
+      } else {
+        const mv = g.moves({square:sel, verbose:true}).find(m=>m.to===sq);
+        if(mv){
+          if(targets.includes(sq) || acceptAny){
+            g.move({from:sel,to:sq,promotion:"q"});
+            drawBoard(el, g, {interactive:false});
+            $("#movefb").innerHTML=`<div class="feedback good">${praise()} ${esc(s.after||"Well moved!")}</div>`;
+            confetti(50); logActivity("practice", L.id+" move");
+            setTimeout(()=>{LES.step++;render("lesson");},1600);
+          } else {
+            $("#movefb").innerHTML=`<div class="feedback try">Good thinking — that's a legal move too! Now try a <b>glowing</b> square. ✨</div>`;
+            sel=null; draw();
+          }
+        } else { sel=null; draw(); }
+      }
+    }});
+  }
+  draw();
+}
+
+/* ============================ 3I. QUIZ =================================== */
+let QUIZ=null;
+function startQuiz(){ QUIZ={lesson:LES.lesson, idx:LES.idx, q:0, score:0, answers:[]}; NAV.push("quiz"); render("quiz"); }
+function renderQuiz(){
+  const L=QUIZ.lesson;
+  if(QUIZ.q>=L.quiz.length){ finishQuiz(); return; }
+  const q=L.quiz[QUIZ.q];
+  view.innerHTML = topbar(`Quiz: ${L.title}`) +
+  `<div class="progressbar"><div style="width:${Math.round(QUIZ.q/L.quiz.length*100)}%"></div></div>
+   <div class="card butter"><h2>Question ${QUIZ.q+1} of ${L.quiz.length}</h2>
+   <p style="font-size:20px"><b>${esc(q.q)}</b></p>
+   <div id="choices">${q.choices.map((c,i)=>`<button class="choice" onclick="answerQuiz(${i})">${esc(c)}</button>`).join("")}</div>
+   <div id="qfb"></div></div>`;
+}
+function answerQuiz(i){
+  const q=QUIZ.lesson.quiz[QUIZ.q];
+  const ok = i===q.answer;
+  $$("#choices .choice").forEach((b,bi)=>{ b.disabled=true; if(bi===q.answer)b.classList.add("correct"); else if(bi===i)b.classList.add("wrong"); });
+  if(ok){ QUIZ.score++; $("#qfb").innerHTML=`<div class="feedback good">${praise()} ${esc(q.explain)}</div>`; confetti(30); }
+  else $("#qfb").innerHTML=`<div class="feedback try">${tryAgain()} ${esc(q.explain)}</div>`;
+  QUIZ.answers.push(ok);
+  setTimeout(()=>{QUIZ.q++;render("quiz");},1900);
+}
+async function finishQuiz(){
+  const L=QUIZ.lesson, total=L.quiz.length, sc=QUIZ.score;
+  const pct=sc/total, stars = pct>=0.8?3 : pct>=0.5?2 : 1;
+  const prev = await dbGet(`progress/${PROFILE.id}/lessons/${L.id}`);
+  const attempts=((prev&&prev.attempts)||0)+1;
+  await dbSet(`progress/${PROFILE.id}/lessons/${L.id}`,
+    {completed:true, stars:Math.max(stars,(prev&&prev.stars)||0), bestScore:Math.max(sc,(prev&&prev.bestScore)||0), attempts, updatedAt:Date.now()});
+  await addXP(stars*10);
+  await logActivity("quiz", `${L.id}: ${sc}/${total} (${stars}★)`);
+  await maybeBadge(L.id, stars);
+  const msg = stars===3 ? `${praise()} You earned 3 stars! ⭐⭐⭐`
+    : stars===2 ? `2 stars! ${sc}/${total} correct. Want to replay the lesson to grab that third star?`
+    : `1 star — and that's okay! Every champion replays lessons. Let's look at the tricky parts again together. 💪`;
+  view.innerHTML = topbar("Quiz results", false) + `
+  <div class="card ${stars===3?"butter":stars===2?"mint":"peach"} center">
+    <div class="big-emoji">${stars===3?"🏆":stars===2?"🌟":"💪"}</div>
+    <h1>${sc} / ${total}</h1><div style="font-size:34px">${starsHTML(stars)}</div>
+    <p style="font-size:19px">${msg}</p>
+    ${stars===3?`<button class="btn primary big" onclick="bonusChallenge()">⚡ Bonus challenge!</button>`:""}
+    ${stars===1?`<button class="btn sky big" onclick="startLesson(${QUIZ.idx})">↻ Replay lesson with hints</button>`:""}
+    <button class="btn ghost big" onclick="NAV=['home'];render('home')">Back to lessons</button>
+  </div>`;
+  confetti(stars*40);
+}
+async function addXP(n){
+  const sk=(await dbGet(`progress/${PROFILE.id}/skill`))||{level:1,xp:0};
+  sk.xp=(sk.xp||0)+n; sk.level=Math.min(10,1+Math.floor(sk.xp/100));
+  await dbSet(`progress/${PROFILE.id}/skill`,sk);
+}
+async function maybeBadge(lessonId, stars){
+  const map={knight:"Knight Jumper 🐴",check:"Checkmate Champ 🏆",tactics:"Tactic Wizard 🧙",endgame:"Endgame Expert 🎯",pawn:"Pawn Promoter 👑"};
+  const b=map[lessonId];
+  if(b&&stars>=2){ const v=(await dbGet(`progress/${PROFILE.id}/badges`))||{}; if(!v[b]){ v[b]=Date.now(); await dbSet(`progress/${PROFILE.id}/badges`,v); setTimeout(()=>toast("New badge: "+b+"!"),1200);} }
+}
+async function earnedBadges(){ const v=await dbGet(`progress/${PROFILE.id}/badges`); return v?Object.keys(v):[]; }
+function bonusChallenge(){ go("puzzles"); setTimeout(()=>toast("Bonus challenge: solve 2 puzzles!"),600); }
+
+/* ============================ 3J. BOARD RENDERER ========================= */
+const GLYPH = {k:"\u265A", q:"\u265B", r:"\u265C", b:"\u265D", n:"\u265E", p:"\u265F"};
+/* opts: {orientation:'w'|'b', highlights:{sq:'hint'|'good'|'sel'|'last'|'check'},
+          dots:[sq], caps:[sq], interactive:bool, onTap(sq), showCoords} */
+function drawBoard(el, game, opts){
+  opts = opts||{};
+  el.innerHTML="";
+  const orient = opts.orientation||"w";
+  const b = game.board();
+  for(let r=0;r<8;r++) for(let f=0;f<8;f++){
+    const rr = orient==="w"? r : 7-r;
+    const ff = orient==="w"? f : 7-f;
+    const sq = "abcdefgh"[ff] + (8-rr);
+    const piece = b[rr][ff];
+    const d = document.createElement("div");
+    d.className = "square " + (((rr+ff)%2===0)?"light":"dark");
+    d.dataset.sq = sq;
+    if(piece){
+      const s=document.createElement("span");
+      s.className="piece "+piece.color; s.textContent=GLYPH[piece.type];
+      d.appendChild(s);
+    }
+    const hl = opts.highlights && opts.highlights[sq];
+    if(hl==="hint") d.style.boxShadow="inset 0 0 0 5px rgba(127,182,245,.95)";
+    else if(hl==="good") d.style.boxShadow="inset 0 0 0 5px rgba(111,207,151,.95)";
+    else if(hl==="sel") d.classList.add("sel");
+    else if(hl==="last") d.classList.add("lastmove");
+    else if(hl==="check") d.classList.add("incheck");
+    if(opts.dots && opts.dots.indexOf(sq)>=0){ const dot=document.createElement("div"); dot.className="dot"; d.appendChild(dot); }
+    if(opts.caps && opts.caps.indexOf(sq)>=0){ const ring=document.createElement("div"); ring.className="cap-ring"; d.appendChild(ring); }
+    if(opts.showCoords!==false){
+      if(ff===0){ const c=document.createElement("span"); c.className="coord rank"; c.textContent=(8-rr); d.appendChild(c); }
+      if(rr===7){ const c=document.createElement("span"); c.className="coord file"; c.textContent="abcdefgh"[ff]; d.appendChild(c); }
+    }
+    if(opts.interactive) d.addEventListener("click", ()=>opts.onTap(sq));
+    el.appendChild(d);
+  }
+}
+function kingInCheckSq(game){
+  const turn = game.turn();
+  for(let r=0;r<8;r++) for(let f=0;f<8;f++){
+    const b=game.board()[r][f];
+    if(b && b.type==="k" && b.color===turn) return "abcdefgh"[f]+(8-r);
+  }
+  return null;
+}
+function capturedTraysHTML(game){
+  const hist = game.history({verbose:true});
+  const wLost=[], bLost=[];
+  hist.forEach(m=>{ if(m.captured){ (m.color==="w"?bLost:wLost).push(m.captured); } });
+  const order={q:0,r:1,b:2,n:3,p:4};
+  const g=c=>c.sort((a,b2)=>order[a]-order[b2]).map(t=>`<span class="piece ${c==="w"?"b":"w"}" style="font-size:24px">${GLYPH[t]}</span>`).join("");
+  const score = materialScore(game);
+  return `<div class="tray"><span class="muted" style="font-size:14px">You captured:</span> ${g(bLost)} ${score>0?`<b>+${score}</b>`:""}</div>
+          <div class="tray"><span class="muted" style="font-size:14px">Computer captured:</span> ${g(wLost)} ${score<0?`<b>+${-score}</b>`:""}</div>`;
+}
+function materialScore(game){
+  const V={p:1,n:3,b:3,r:5,q:9,k:0}; let s=0;
+  game.board().forEach(row=>row.forEach(pc=>{ if(pc) s += (pc.color==="w"?1:-1)*V[pc.type]; }));
+  return s;
+}
+
+/* ============================ 3K. PUZZLE TRAINER ========================= */
+const PUZZLES = [
+ {id:"pz01", rating:250, theme:"mate", prompt:"Mate in 1 — finish the king!", fen:"7k/5ppp/8/8/8/8/8/R5K1 w - - 0 1", sol:{from:"a1",to:"a8"}},
+ {id:"pz02", rating:320, theme:"mate", prompt:"Mate in 1!", fen:"6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", sol:{from:"a1",to:"a8"}},
+ {id:"pz03", rating:380, theme:"mate", prompt:"The queen delivers mate in 1!", fen:"6k1/5ppp/8/8/8/8/8/Q5K1 w - - 0 1", sol:{from:"a1",to:"a8"}},
+ {id:"pz04", rating:420, theme:"mate", prompt:"Capture AND checkmate in 1!", fen:"r5k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", sol:{from:"a1",to:"a8"}},
+ {id:"pz05", rating:460, theme:"tactic", prompt:"Win the queen!", fen:"4k3/8/8/3q4/8/2N5/8/4K3 w - - 0 1", sol:{from:"c3",to:"d5"}},
+ {id:"pz06", rating:500, theme:"tactic", prompt:"That rook is pinned — grab it!", fen:"4k3/8/8/8/4r3/8/8/4R1K1 w - - 0 1", sol:{from:"e1",to:"e4"}},
+ {id:"pz07", rating:540, theme:"tactic", prompt:"Win a rook with check!", fen:"4k3/8/3r4/8/2N5/8/8/4K3 w - - 0 1", sol:{from:"c4",to:"d6"}},
+ {id:"pz08", rating:580, theme:"tactic", prompt:"Promote — you're winning!", fen:"8/5P1k/8/8/8/8/8/4K3 w - - 0 1", sol:{from:"f7",to:"f8",promotion:"q"}},
+ {id:"pz09", rating:620, theme:"tactic", prompt:"Win the queen!", fen:"6k1/8/8/8/8/8/3q4/3RK3 w - - 0 1", sol:{from:"d1",to:"d2"}},
+ {id:"pz10", rating:660, theme:"mate", prompt:"Mate in 1!", fen:"6k1/5ppp/8/8/8/8/8/3R2K1 w - - 0 1", sol:{from:"d1",to:"d8"}},
+ {id:"pz11", rating:700, theme:"mate", prompt:"Queen mate in 1!", fen:"6k1/5ppp/8/8/8/8/1Q6/6K1 w - - 0 1", sol:{from:"b2",to:"b8"}},
+ {id:"pz12", rating:740, theme:"mate", prompt:"A beautiful queen mate in 1!", fen:"k7/8/1QK5/8/8/8/8/8 w - - 0 1", sol:{from:"b6",to:"b7"}},
+ {id:"pz13", rating:780, theme:"mate", prompt:"Mate in 1 — you're on fire!", fen:"6k1/5ppp/8/8/8/8/8/2R3K1 w - - 0 1", sol:{from:"c1",to:"c8"}},
+];
+let PZ = null;
+async function pickPuzzle(){
+  const rating = (await dbGet(`progress/${PROFILE.id}/puzzleRating`)) || 400;
+  const done = (await dbGet(`progress/${PROFILE.id}/puzzles`)) || {};
+  const unsolved = PUZZLES.filter(p=>!done[p.id] || !done[p.id].solved);
+  const pool = unsolved.length?unsolved:PUZZLES;
+  pool.sort((a,b)=>Math.abs(a.rating-rating)-Math.abs(b.rating-rating));
+  return pool[0];
+}
+async function renderPuzzles(){
+  PZ = {puz: await pickPuzzle(), attempts:0, game:new Chess()};
+  PZ.game.load(PZ.puz.fen);
+  drawPuzzle();
+}
+function drawPuzzle(){
+  view.innerHTML = topbar("Puzzle trainer") + `
+  <div class="card butter"><h2>🧩 ${esc(PZ.puz.prompt)}</h2>
+    <p class="muted">White to move. Find the best move!</p>
+    <div class="board-wrap"><div class="board" id="pb"></div></div>
+    <div id="pzfb"></div>
+    <div class="center"><button class="btn ghost" onclick="render('home')">Done for now</button></div>
+  </div>`;
+  const el=$("#pb"); let sel=null;
+  drawBoard(el, PZ.game, {interactive:true, onTap(sq){
+    const pc=PZ.game.get(sq);
+    if(!sel){ if(pc&&pc.color===PZ.game.turn()){ sel=sq;
+        const mv=PZ.game.moves({square:sq,verbose:true});
+        drawBoard(el,PZ.game,{highlights:{[sq]:"sel"},dots:mv.filter(m=>!m.captured).map(m=>m.to),caps:mv.filter(m=>m.captured).map(m=>m.to),interactive:true,onTap:arguments.callee});
+      } return; }
+    const legal=PZ.game.moves({square:sel,verbose:true}).find(m=>m.to===sq);
+    if(!legal){ sel=null; drawBoard(el,PZ.game,{interactive:true,onTap:arguments.callee}); return; }
+    attemptPuzzleMove(sel,sq,legal);
+  }});
+}
+async function attemptPuzzleMove(from,to,legal){
+  const sol=PZ.puz.sol;
+  const needPromo = !!sol.promotion;
+  let promo=null;
+  if(needPromo || (legal.promotion)){
+    promo = await promoPicker(legal.promotion ? null : null); // picker handles it
+  }
+  const ok = (from===sol.from && to===sol.to && (!needPromo || promo===sol.promotion));
+  if(ok){
+    PZ.game.move({from,to,promotion:promo||"q"});
+    drawBoard($("#pb"),PZ.game,{interactive:false,highlights:{[from]:"last",[to]:"last"}});
+    $("#pzfb").innerHTML=`<div class="feedback good">${praise()} That's the move! 🎉</div>`;
+    confetti(60);
+    const r=((await dbGet(`progress/${PROFILE.id}/puzzleRating`))||400)+20;
+    await dbSet(`progress/${PROFILE.id}/puzzleRating`,r);
+    await dbSet(`progress/${PROFILE.id}/puzzles/${PZ.puz.id}`,{solved:true,attempts:PZ.attempts+1,updatedAt:Date.now()});
+    await addXP(10); await logActivity("puzzle", `${PZ.puz.id} solved`);
+    setTimeout(()=>{ render("puzzles"); },1800);
+  } else {
+    PZ.attempts++;
+    if(PZ.attempts>=3){
+      // show the solution, then offer a similar retry
+      PZ.game.move({from:sol.from,to:sol.to,promotion:sol.promotion||"q"});
+      drawBoard($("#pb"),PZ.game,{interactive:false,highlights:{[sol.from]:"hint",[sol.to]:"good"}});
+      $("#pzfb").innerHTML=`<div class="feedback try">Here's the idea: <b>${sol.from} → ${sol.to}</b>. Watch it once more, then try a similar one! 💡</div>
+        <div class="center"><button class="btn primary big" onclick="retrySimilarPuzzle('${PZ.puz.theme}')">Try a similar one</button></div>`;
+      await logActivity("puzzle", `${PZ.puz.id} shown solution`);
+    } else {
+      PZ.game.move({from,to,promotion:promo||"q"}); // show it, then take back kindly
+      drawBoard($("#pb"),PZ.game,{interactive:false});
+      setTimeout(()=>{ PZ.game.undo(); drawPuzzleKeep(); },900);
+      $("#pzfb").innerHTML=`<div class="feedback try">${tryAgain()} ${PZ.attempts===2?"Last try before I show you!":""}</div>`;
+    }
+  }
+}
+function drawPuzzleKeep(){ // redraw current puzzle board without resetting attempts
+  const keep=PZ; view.innerHTML = topbar("Puzzle trainer") + `
+  <div class="card butter"><h2>🧩 ${esc(keep.puz.prompt)}</h2>
+    <div class="board-wrap"><div class="board" id="pb"></div></div><div id="pzfb"></div>
+    <div class="center"><button class="btn ghost" onclick="render('home')">Done for now</button></div></div>`;
+  const el=$("#pb"); let sel=null;
+  drawBoard(el,keep.game,{interactive:true,onTap(sq){
+    const pc=keep.game.get(sq);
+    if(!sel){ if(pc&&pc.color===keep.game.turn()){ sel=sq;
+        const mv=keep.game.moves({square:sq,verbose:true});
+        drawBoard(el,keep.game,{highlights:{[sq]:"sel"},dots:mv.filter(m=>!m.captured).map(m=>m.to),caps:mv.filter(m=>m.captured).map(m=>m.to),interactive:true,onTap:arguments.callee});
+      } return; }
+    const legal=keep.game.moves({square:sel,verbose:true}).find(m=>m.to===sq);
+    if(!legal){ sel=null; drawBoard(el,keep.game,{interactive:true,onTap:arguments.callee}); return; }
+    attemptPuzzleMove(sel,sq,legal);
+  }});
+}
+async function retrySimilarPuzzle(theme){
+  const done=(await dbGet(`progress/${PROFILE.id}/puzzles`))||{};
+  const cands=PUZZLES.filter(p=>p.theme===theme&&(!done[p.id]||!done[p.id].solved)&&p.id!==PZ.puz.id);
+  PZ={puz:cands[0]||PUZZLES.find(p=>p.id!==PZ.puz.id),attempts:0,game:new Chess()};
+  PZ.game.load(PZ.puz.fen); drawPuzzle();
+}
+/* promotion picker returns a promise resolving to 'q'|'r'|'b'|'n' */
+function promoPicker(){
+  return new Promise(res=>{
+    const old=view.innerHTML;
+    const d=document.createElement("div");
+    d.innerHTML=`<div class="card butter center" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:50;max-width:92vw">
+      <h2>Promote to…</h2><div class="promo-grid">
+      <button data-p="q">♛</button><button data-p="r">♜</button><button data-p="b">♝</button><button data-p="n">♞</button>
+      </div></div>`;
+    document.body.appendChild(d);
+    d.querySelectorAll("button").forEach(b=>b.onclick=()=>{d.remove();res(b.dataset.p);});
+  });
+}
+
+/* ============================ 3L. COMPUTER AI ============================ */
+const AI_NAMES={1:"Sleepy Sloth 🦥",2:"Bouncy Bunny 🐰",3:"Clever Fox 🦊",4:"Wise Owl 🦉",5:"Turbo Tiger 🐯"};
+const AI_DEPTH={1:1,2:1,3:2,4:2,5:3};
+const AI_RANDOM={1:0.35,2:0.12,3:0.03,4:0,5:0};
+const AI_BLURB={1:"makes sleepy mistakes — you can beat me!",2:"learning, just like you!",3:"thinks a couple moves ahead!",4:"a real challenge!",5:"grandmaster training mode!"};
+/* piece-square tables (white perspective, a8=0 … h1=63) */
+const PST={
+p:[0,0,0,0,0,0,0,0,50,50,50,50,50,50,50,50,10,10,20,30,30,20,10,10,5,5,10,25,25,10,5,5,0,0,0,20,20,0,0,0,5,-5,-10,0,0,-10,-5,5,5,10,10,-20,-20,10,10,5,0,0,0,0,0,0,0,0],
+n:[-50,-40,-30,-30,-30,-30,-40,-50,-40,-20,0,0,0,0,-20,-40,-30,0,10,15,15,10,0,-30,-30,5,15,20,20,15,5,-30,-30,0,15,20,20,15,0,-30,-30,5,10,15,15,10,5,-30,-40,-20,0,5,5,0,-20,-40,-50,-40,-30,-30,-30,-30,-40,-50],
+b:[-20,-10,-10,-10,-10,-10,-10,-20,-10,0,0,0,0,0,0,-10,-10,0,5,10,10,5,0,-10,-10,5,5,10,10,5,5,-10,-10,0,10,10,10,10,0,-10,-10,10,10,10,10,10,10,-10,-10,5,0,0,0,0,5,-10,-20,-10,-10,-10,-10,-10,-10,-20],
+r:[0,0,0,0,0,0,0,0,5,10,10,10,10,10,10,5,-5,0,0,0,0,0,0,-5,-5,0,0,0,0,0,0,-5,-5,0,0,0,0,0,0,-5,-5,0,0,0,0,0,0,-5,-5,0,0,0,0,0,0,-5,0,0,0,5,5,0,0,0],
+q:[-20,-10,-10,-5,-5,-10,-10,-20,-10,0,0,0,0,0,0,-10,-10,0,5,5,5,5,0,-10,-5,0,5,5,5,5,0,-5,0,0,5,5,5,5,0,-5,-10,5,5,5,5,5,0,-10,-10,0,5,0,0,0,0,-10,-20,-10,-10,-5,-5,-10,-10,-20],
+k:[-30,-40,-40,-50,-50,-40,-40,-30,-30,-40,-40,-50,-50,-40,-40,-30,-30,-40,-40,-50,-50,-40,-40,-30,-30,-40,-40,-50,-50,-40,-40,-30,-20,-30,-30,-40,-40,-30,-30,-20,-10,-20,-20,-20,-20,-20,-20,-10,20,20,0,0,0,0,20,20,20,30,10,0,0,10,30,20]};
+const PCVAL={p:100,n:320,b:330,r:500,q:900,k:0};
+function evaluate(g){
+  let s=0; const b=g.board();
+  for(let r=0;r<8;r++)for(let f=0;f<8;f++){
+    const pc=b[r][f]; if(!pc)continue;
+    const idx=pc.color==="w"?r*8+f:(7-r)*8+f;
+    const v=PCVAL[pc.type]+PST[pc.type][idx];
+    s+=pc.color==="w"?v:-v;
+  }
+  return s;
+}
+let NODES=0;
+function orderMoves(g){
+  const moves=g.moves({verbose:true});
+  moves.forEach(m=>{ m._s=(m.captured?10*PCVAL[m.captured]-PCVAL[m.piece]:0)+(m.promotion?900:0); });
+  moves.sort((a,b)=>b._s-a._s);
+  return moves;
+}
+function alphabeta(g,depth,alpha,beta,maxing){
+  if(++NODES>25000) return evaluate(g);
+  if(depth===0||g.game_over()){
+    if(g.in_checkmate()) return maxing?-100000:100000;
+    if(g.in_draw()||g.in_stalemate()||g.in_threefold_repetition()||g.insufficient_material()) return 0;
+    return evaluate(g);
+  }
+  const moves=orderMoves(g);
+  if(maxing){ let best=-Infinity;
+    for(const m of moves){ g.move({from:m.from,to:m.to,promotion:m.promotion}); const v=alphabeta(g,depth-1,alpha,beta,false); g.undo();
+      if(v>best)best=v; if(best>alpha)alpha=best; if(alpha>=beta)break; }
+    return best;
+  } else { let best=Infinity;
+    for(const m of moves){ g.move({from:m.from,to:m.to,promotion:m.promotion}); const v=alphabeta(g,depth-1,alpha,beta,true); g.undo();
+      if(v<best)best=v; if(best<beta)beta=best; if(alpha>=beta)break; }
+    return best;
+  }
+}
+function aiBestMove(g,level){
+  const moves=orderMoves(g);
+  if(!moves.length) return null;
+  if(Math.random()<AI_RANDOM[level]) return moves[Math.floor(Math.random()*moves.length)];
+  const depth=AI_DEPTH[level], maxing=g.turn()==="w";
+  NODES=0; let best=moves[0], bestV=maxing?-Infinity:Infinity;
+  for(const m of moves){
+    g.move({from:m.from,to:m.to,promotion:m.promotion});
+    const v=alphabeta(g,depth-1,-Infinity,Infinity,!maxing);
+    g.undo();
+    const better = maxing ? v>bestV+ (level===4?Math.random()*8:0) : v<bestV-(level===4?Math.random()*8:0);
+    if(better){ bestV=v; best=m; }
+  }
+  return best;
+}
+
+/* ============================ 3M. PLAY VS COMPUTER ======================= */
+let PG=null; // {game, kidColor, aiLevel, sel, lastMove, over}
+async function autoAILevel(){
+  if(PROFILE._coachAI) return PROFILE._coachAI;
+  const sk=(await dbGet(`progress/${PROFILE.id}/skill`))||{level:1};
+  return Math.max(1,Math.min(5,Math.ceil((sk.level||1)/2)));
+}
+async function renderPlay(){
+  const rec=await autoAILevel();
+  PG={setup:true, recLevel:rec, aiLevel:rec, kidColor:"w"};
+  drawPlaySetup();
+}
+function drawPlaySetup(){
+  view.innerHTML=topbar("Play the computer")+`
+  <div class="card sky center"><div class="big-emoji">🤖</div><h2>Choose your challenger!</h2>
+  <p class="muted">Recommended for you: <b>${AI_NAMES[PG.recLevel]}</b></p>
+  <div class="diff-pick" style="justify-content:center">
+    ${[1,2,3,4,5].map(l=>`<button class="diff-btn${l===PG.aiLevel?" sel":""}" onclick="PG.aiLevel=${l};drawPlaySetup()">${AI_NAMES[l]}<br><span class="muted">${AI_BLURB[l]}</span></button>`).join("")}
+  </div>
+  <h3>Play as</h3>
+  <div class="diff-pick" style="justify-content:center">
+    <button class="diff-btn${PG.kidColor==="w"?" sel":""}" onclick="PG.kidColor='w';drawPlaySetup()">⚪ White (move first)</button>
+    <button class="diff-btn${PG.kidColor==="b"?" sel":""}" onclick="PG.kidColor='b';drawPlaySetup()">⚫ Black</button>
+    <button class="diff-btn${PG.kidColor==="r"?" sel":""}" onclick="PG.kidColor='r';drawPlaySetup()">🎲 Random</button>
+  </div>
+  <button class="btn primary big" onclick="startComputerGame()">Start game! ♞</button></div>`;
+}
+function startComputerGame(){
+  let kc=PG.kidColor; if(kc==="r") kc=Math.random()<0.5?"w":"b";
+  PG={game:new Chess(), kidColor:kc, aiLevel:PG.aiLevel, sel:null, lastMove:null, over:false, moves:0};
+  NAV.push("playgame"); drawPlayGame();
+  if(PG.kidColor==="b") setTimeout(aiMove,700);
+}
+function drawPlayGame(){
+  const g=PG.game;
+  view.innerHTML=topbar("vs "+AI_NAMES[PG.aiLevel])+`
+  <div class="card"><div class="board-wrap"><div class="board" id="gb"></div></div>
+  <div id="gmsg"></div>${capturedTraysHTML(g)}
+  <div class="movelist" id="ml"></div>
+  <div class="center">
+    <button class="btn ghost" onclick="offerDraw()">🤝 Draw?</button>
+    <button class="btn rose" onclick="resignGame()">🏳️ Resign</button>
+    <button class="btn mint" onclick="render('play')">↻ New game</button>
+  </div></div>`;
+  updateMoveList(); drawPlayBoard();
+  if(!PG.over && g.turn()!==PG.kidColor) $("#gmsg").innerHTML=`<p class="muted center">${AI_NAMES[PG.aiLevel].split(" ")[0]} is thinking…</p>`;
+}
+function drawPlayBoard(){
+  const g=PG.game, el=$("#gb"); if(!el)return;
+  const hl={};
+  if(PG.lastMove){ hl[PG.lastMove.from]="last"; hl[PG.lastMove.to]="last"; }
+  if(g.in_check()){ const k=kingInCheckSq(g); if(k) hl[k]="check"; }
+  let dots=[],caps=[];
+  if(PG.sel){ const mv=g.moves({square:PG.sel,verbose:true}); dots=mv.filter(m=>!m.captured).map(m=>m.to); caps=mv.filter(m=>m.captured).map(m=>m.to); hl[PG.sel]="sel"; }
+  const myTurn=!PG.over&&g.turn()===PG.kidColor;
+  drawBoard(el,g,{orientation:PG.kidColor,highlights:hl,dots,caps,interactive:myTurn,onTap(sq){
+    if(!myTurn||PG.over)return;
+    if(!PG.sel){ const pc=g.get(sq); if(pc&&pc.color===g.turn()){PG.sel=sq;drawPlayBoard();} return; }
+    if(sq===PG.sel){PG.sel=null;drawPlayBoard();return;}
+    const mv=g.moves({square:PG.sel,verbose:true}).find(m=>m.to===sq);
+    if(mv){ doKidMove(mv); } else { const pc=g.get(sq); PG.sel=(pc&&pc.color===g.turn())?sq:null; drawPlayBoard(); }
+  }});
+}
+async function doKidMove(mv){
+  let promo=null;
+  if(mv.promotion){ promo=await promoPicker(); }
+  const g=PG.game;
+  const res=g.move({from:mv.from,to:mv.to,promotion:promo||"q"});
+  PG.sel=null; PG.lastMove={from:res.from,to:res.to}; PG.moves++;
+  afterMove();
+}
+function afterMove(){
+  const g=PG.game;
+  drawPlayBoard(); updateMoveList();
+  if(g.game_over()){ endComputerGame(); return; }
+  if(g.turn()!==PG.kidColor){ setTimeout(aiMove,450); }
+}
+function aiMove(){
+  if(PG.over||PG.game.turn()===PG.kidColor)return;
+  const m=aiBestMove(PG.game,PG.aiLevel);
+  if(!m){endComputerGame();return;}
+  const res=PG.game.move({from:m.from,to:m.to,promotion:m.promotion||"q"});
+  PG.lastMove={from:res.from,to:res.to}; PG.moves++;
+  const gmsg=$("#gmsg"); if(gmsg)gmsg.innerHTML="";
+  drawPlayBoard(); updateMoveList();
+  if(PG.game.game_over()) endComputerGame();
+}
+function updateMoveList(){
+  const el=$("#ml"); if(!el)return;
+  const h=PG.game.history(); let html="<table>";
+  for(let i=0;i<h.length;i+=2) html+=`<tr><td class="muted">${i/2+1}.</td><td><b>${esc(h[i])}</b></td><td>${esc(h[i+1]||"")}</td></tr>`;
+  el.innerHTML=html+"</table>"; el.scrollTop=el.scrollHeight;
+}
+function offerDraw(){ if(!PG.over){ PG.over=true; finishComputerGame("draw","You agreed a draw — well played!"); } }
+function resignGame(){ if(!PG.over){ PG.over=true; finishComputerGame("loss","Good game! Every loss teaches something. 💪"); } }
+async function endComputerGame(){
+  const g=PG.game; let result,msg;
+  if(g.in_checkmate()){ const kidWon=g.turn()!==PG.kidColor; result=kidWon?"win":"loss";
+    msg=kidWon?`${praise()} CHECKMATE — YOU WIN! 🏆`:"Checkmate — the computer got this one. You'll get the next! 💪"; }
+  else if(g.in_stalemate()){ result="draw"; msg="Stalemate — a draw! Watch out for those!"; }
+  else { result="draw"; msg="Draw! Well played!"; }
+  PG.over=true; finishComputerGame(result,msg);
+}
+async function finishComputerGame(result,msg){
+  drawPlayBoard();
+  const xp=result==="win"?20:result==="draw"?10:5;
+  await addXP(xp);
+  const gid=(await dbPush("games",{type:"vs-computer",profileIds:[PROFILE.id],result,difficulty:PG.aiLevel,moveCount:PG.moves,createdAt:Date.now()})).key;
+  await logActivity("game",`vs-computer ${result} (lvl ${PG.aiLevel}, ${PG.moves} moves)`);
+  view.innerHTML=topbar("Game over",false)+`
+  <div class="card ${result==="win"?"butter":result==="draw"?"sky":"peach"} center">
+    <div class="big-emoji">${result==="win"?"🏆":result==="draw"?"🤝":"💪"}</div>
+    <h1>${result==="win"?"You win!":result==="draw"?"Draw!":"Good game!"}</h1>
+    <p style="font-size:19px">${msg}</p><p class="muted">+${xp} XP · vs ${AI_NAMES[PG.aiLevel]}</p>
+    <button class="btn primary big" onclick="render('play')">↻ Play again</button>
+    <button class="btn ghost big" onclick="NAV=['home'];render('home')">Home</button>
+  </div>`;
+  if(result==="win")confetti(100);
+}
+
+/* ============================ 3N. LIVE FAMILY GAMES ======================= */
+let LG=null;
+function renderLiveLobby(){
+  view.innerHTML=topbar("Play family")+`
+  <div class="card lavender center"><div class="big-emoji">👧🧒</div><h2>Play someone in your family!</h2>
+  <p class="muted">Live games work across iPads — one player creates, the other joins with the code.</p></div>
+  <button class="btn primary big" onclick="createLiveGame()">✨ Create a live game</button>
+  <button class="btn sky big" onclick="joinLiveUI()">🔑 Join with code</button>
+  <button class="btn mint big" onclick="startPassPlay()">📱 Pass-and-play (one iPad)</button>`;
+}
+async function createLiveGame(){
+  const code=rnd(4);
+  const g=new Chess();
+  await dbSet(`liveGames/${code}`,{status:"waiting",white:PROFILE.id,black:null,fen:g.fen(),moves:[],turn:"w",winner:null,lastMove:null,updatedAt:Date.now()});
+  await logActivity("livegame",`created ${code}`);
+  view.innerHTML=topbar("Waiting…")+`
+  <div class="card butter center"><h2>Share this code!</h2>
+  <div class="lobby-code">${code}</div>
+  <p>On the other iPad: <b>Play family → Join with code</b><br>You play <b>White</b> ♔</p>
+  <p class="muted">Waiting for your opponent…</p>
+  <button class="btn rose" onclick="cancelLive('${code}')">Cancel</button></div>`;
+  const cb=ref(`liveGames/${code}`).on("value",snap=>{
+    const d=snap.val();
+    if(!d){return;}
+    if(d.status==="active"&&d.black){ enterLiveGame(code,"w"); }
+  });
+  LIVE_UNSUBS.push(()=>ref(`liveGames/${code}`).off("value",cb));
+  LG={code,watching:true};
+}
+async function cancelLive(code){ try{await ref(`liveGames/${code}`).remove();}catch(e){} back(); }
+function joinLiveUI(){
+  view.innerHTML=topbar("Join game")+`
+  <div class="card sky center"><h2>Enter the game code</h2>
+  <input type="text" id="gcode" maxlength="4" placeholder="ABCD" autocomplete="off"
+    style="text-transform:uppercase;letter-spacing:6px;text-align:center;font-size:32px;font-family:ui-monospace,monospace;">
+  <button class="btn primary big" onclick="doJoinLive()">Join! ♞</button></div>`;
+}
+async function doJoinLive(){
+  const code=(($("#gcode").value||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,""));
+  const d=await dbGet(`liveGames/${code}`);
+  if(!d){toast("No game with that code. Check it and try again!");return;}
+  if(d.status!=="waiting"){toast("That game already started or ended.");return;}
+  if(d.white===PROFILE.id){toast("That's your own game — join from the other iPad!");return;}
+  await dbUpdate(`liveGames/${code}`,{black:PROFILE.id,status:"active",updatedAt:Date.now()});
+  await logActivity("livegame",`joined ${code}`);
+  enterLiveGame(code,"b");
+}
+async function enterLiveGame(code,color){
+  LIVE_UNSUBS.forEach(u=>{try{u();}catch(e){}}); LIVE_UNSUBS=[];
+  LG={code,color,game:new Chess(),data:null,done:false,oppName:"Opponent"};
+  NAV.push("livegame");
+  const cb=ref(`liveGames/${code}`).on("value",async snap=>{
+    const d=snap.val(); if(!d){ if(!LG.done){toast("Game closed.");back();} return; }
+    LG.data=d; LG.game.load(d.fen);
+    const oppPid=color==="w"?d.black:d.white;
+    if(oppPid&&LG.oppName==="Opponent"){
+      const n=await dbGet(`profiles/${oppPid}/name`); if(n)LG.oppName=n;
+    }
+    if(d.status==="finished"&&!LG.done){ LG.done=true; onLiveFinished(d); return; }
+    drawLiveBoard();
+  });
+  LIVE_UNSUBS.push(()=>ref(`liveGames/${code}`).off("value",cb));
+  drawLiveBoard();
+}
+function myLiveTurn(){
+  if(!LG||!LG.data||LG.data.status!=="active")return false;
+  const myPid=PROFILE.id;
+  const myColor=LG.data.white===myPid?"w":LG.data.black===myPid?"b":null;
+  return myColor&&LG.data.turn===myColor;
+}
+function drawLiveBoard(){
+  const d=LG.data, g=LG.game;
+  const myColor=d?(d.white===PROFILE.id?"w":d.black===PROFILE.id?"b":LG.color):LG.color;
+  const hl={};
+  if(d&&d.lastMove){hl[d.lastMove.from]="last";hl[d.lastMove.to]="last";}
+  if(g.in_check()){const k=kingInCheckSq(g);if(k)hl[k]="check";}
+  let dots=[],caps=[];
+  if(LG.sel&&myLiveTurn()){const mv=g.moves({square:LG.sel,verbose:true});dots=mv.filter(m=>!m.captured).map(m=>m.to);caps=mv.filter(m=>m.captured).map(m=>m.to);hl[LG.sel]="sel";}
+  view.innerHTML=topbar(`vs ${esc(LG.oppName)}`)+`
+  <div class="card"><p class="center muted">You are <b>${myColor==="w"?"White ♔":"Black ♚"}</b> ·
+  ${!d||d.status==="waiting"?"Waiting…":(myLiveTurn()?"<b>Your move!</b>":LG.oppName+" is thinking…")}</p>
+  <div class="board-wrap"><div class="board" id="lgb"></div></div>
+  <div class="movelist" id="lml"></div>
+  <div class="center"><button class="btn rose" onclick="resignLive()">🏳️ Resign</button>
+  <button class="btn ghost" onclick="leaveLive()">Leave</button></div></div>`;
+  const h=g.history();let html="<table>";
+  for(let i=0;i<h.length;i+=2)html+=`<tr><td class="muted">${i/2+1}.</td><td><b>${esc(h[i])}</b></td><td>${esc(h[i+1]||"")}</td></tr>`;
+  const ml=$("#lml"); if(ml){ml.innerHTML=html+"</table>";ml.scrollTop=ml.scrollHeight;}
+  const el=$("#lgb");
+  drawBoard(el,g,{orientation:myColor,highlights:hl,dots,caps,interactive:myLiveTurn(),onTap:async sq=>{
+    if(!myLiveTurn())return;
+    if(!LG.sel){const pc=g.get(sq);if(pc&&pc.color===g.turn()){LG.sel=sq;drawLiveBoard();}return;}
+    if(sq===LG.sel){LG.sel=null;drawLiveBoard();return;}
+    const mv=g.moves({square:LG.sel,verbose:true}).find(m=>m.to===sq);
+    if(!mv){const pc=g.get(sq);LG.sel=(pc&&pc.color===g.turn())?sq:null;drawLiveBoard();return;}
+    let promo=null; if(mv.promotion)promo=await promoPicker();
+    const res=g.move({from:mv.from,to:mv.to,promotion:promo||"q"});
+    LG.sel=null;
+    const upd={fen:g.fen(),turn:g.turn(),lastMove:{from:res.from,to:res.to},updatedAt:Date.now(),
+      moves:(LG.data.moves||[]).concat([res.san])};
+    if(g.game_over()){
+      upd.status="finished";
+      upd.winner=g.in_checkmate()?(g.turn()==="w"?"b":"w"):"draw";
+      await recordLiveResult(upd.winner);
+    }
+    await dbUpdate(`liveGames/${LG.code}`,upd);
+  }});
+}
+async function recordLiveResult(winner){
+  const d=LG.data;
+  const pids=[d.white,d.black].filter(Boolean);
+  await dbPush("games",{type:"vs-kid",profileIds:pids,result:winner==="draw"?"draw":(winner==="w"?"white-wins":"black-wins"),
+    winnerPid:winner==="draw"?null:(winner==="w"?d.white:d.black),moveCount:(d.moves||[]).length+1,createdAt:Date.now()});
+  await logActivity("livegame",`finished ${LG.code}: ${winner}`);
+}
+async function resignLive(){
+  if(!LG||!LG.data||LG.data.status!=="active")return;
+  const myColor=LG.data.white===PROFILE.id?"w":"b";
+  const winner=myColor==="w"?"b":"w";
+  await recordLiveResult(winner);
+  await dbUpdate(`liveGames/${LG.code}`,{status:"finished",winner,updatedAt:Date.now()});
+}
+async function leaveLive(){ back(); }
+function onLiveFinished(d){
+  const wnames={w:"White",b:"Black",draw:null};
+  let title,msg,win=false;
+  if(d.winner==="draw"){title="Draw!";msg="Well played, both of you! 🤝";}
+  else{
+    const iWon=(d.winner==="w"&&d.white===PROFILE.id)||(d.winner==="b"&&d.black===PROFILE.id);
+    win=iWon; title=iWon?"You win! 🏆":"Good game!";
+    msg=iWon?`${praise()} Victory against ${esc(LG.oppName)}!`:`${esc(LG.oppName)} wins this one — rematch? 💪`;
+  }
+  if(win){addXP(15);confetti(100);}
+  view.innerHTML=topbar("Game over",false)+`
+  <div class="card ${win?"butter":"sky"} center"><div class="big-emoji">${win?"🏆":"🤝"}</div>
+  <h1>${title}</h1><p style="font-size:19px">${msg}</p>
+  <button class="btn primary big" onclick="render('live')">↻ New family game</button>
+  <button class="btn ghost big" onclick="NAV=['home'];render('home')">Home</button></div>`;
+  try{ setTimeout(()=>{ref(`liveGames/${LG.code}`).remove().catch(()=>{});},30000); }catch(e){}
+}
+
+/* ---- pass-and-play ---- */
+let PP=null;
+function startPassPlay(){
+  PP={game:new Chess(),sel:null,lastMove:null,over:false}; NAV.push("passplay"); drawPassPlay();
+}
+function renderPassPlayAlias(){ drawPassPlay(); }
+function drawPassPlay(){
+  const g=PP.game;
+  view.innerHTML=topbar("Pass-and-play")+`
+  <div class="card mint"><p class="center"><b>${g.turn()==="w"?"White":"Black"}</b> to move — pass the iPad! 📱</p>
+  <div class="board-wrap"><div class="board" id="ppb"></div></div>
+  <div id="ppmsg"></div>
+  <div class="center"><button class="btn ghost" onclick="back()">End game</button></div></div>`;
+  const el=$("#ppb"); const hl={};
+  if(PP.lastMove){hl[PP.lastMove.from]="last";hl[PP.lastMove.to]="last";}
+  if(g.in_check()){const k=kingInCheckSq(g);if(k)hl[k]="check";}
+  let dots=[],caps=[];
+  if(PP.sel){const mv=g.moves({square:PP.sel,verbose:true});dots=mv.filter(m=>!m.captured).map(m=>m.to);caps=mv.filter(m=>m.captured).map(m=>m.to);hl[PP.sel]="sel";}
+  drawBoard(el,g,{highlights:hl,dots,caps,interactive:!PP.over,onTap:async sq=>{
+    if(PP.over)return;
+    if(!PP.sel){const pc=g.get(sq);if(pc&&pc.color===g.turn()){PP.sel=sq;drawPassPlay();}return;}
+    if(sq===PP.sel){PP.sel=null;drawPassPlay();return;}
+    const mv=g.moves({square:PP.sel,verbose:true}).find(m=>m.to===sq);
+    if(!mv){const pc=g.get(sq);PP.sel=(pc&&pc.color===g.turn())?sq:null;drawPassPlay();return;}
+    let promo=null; if(mv.promotion)promo=await promoPicker();
+    const res=g.move({from:mv.from,to:mv.to,promotion:promo||"q"});
+    PP.sel=null;PP.lastMove={from:res.from,to:res.to};
+    if(g.game_over()){PP.over=true;
+      const msg=g.in_checkmate()?`Checkmate! ${(g.turn()==="w"?"Black":"White")} wins! 🏆`:"Draw! Well played both! 🤝";
+      $("#ppmsg").innerHTML=`<div class="feedback good" style="text-align:center;font-size:20px">${msg}</div>`;confetti(80);
+    }
+    drawPassPlay();
+  }});
+}
+/* ---- pass-and-play uses drawPassPlay directly via the render table ---- */
+
+/* ============================ 3O. PARENT DASHBOARD ======================== */
+async function renderParent(){
+  if(!PROFILE||PROFILE.role!=="parent"){ NAV=["profiles"]; render("profiles"); return; }
+  const kids=Object.entries(PROFILES).filter(([,p])=>p.role!=="parent");
+  view.innerHTML=topbar("Parent dashboard",false)+`
+  <div class="card lavender"><h2>👋 Hi ${esc(PROFILE.name)}!</h2>
+  <p class="muted">Here's how everyone is doing. Stella also sends you a summary every Sunday evening.</p>
+  <div class="tabs">${kids.map(([id,p],i)=>`<button class="tab${i===0?" sel":""}" onclick="parentTab('${id}',this)">${avatarHTML(p,26)} ${esc(p.name)}</button>`).join("")}</div>
+  <div id="ptab"></div>
+  <div class="center" style="margin-top:10px"><button class="btn ghost" onclick="switchProfile()">Switch player</button></div></div>`;
+  if(kids.length) parentTab(kids[0][0], $(".tab"));
+}
+async function parentTab(pid,el){
+  $$(".tab").forEach(t=>t.classList.remove("sel")); if(el)el.classList.add("sel");
+  $("#ptab").innerHTML=`<p class="center muted">Loading ${esc(PROFILES[pid].name)}…</p>`;
+  const [lessons,skill,puz,puzR,streak,badges,acts,coach,gamesSnap]=await Promise.all([
+    dbGet(`progress/${pid}/lessons`),dbGet(`progress/${pid}/skill`),dbGet(`progress/${pid}/puzzles`),
+    dbGet(`progress/${pid}/puzzleRating`),dbGet(`progress/${pid}/streak`),dbGet(`progress/${pid}/badges`),
+    ref(`activities/${pid}`).limitToLast(8).once("value").then(s=>s.val()),
+    dbGet(`coaching/${pid}/directives`),
+    ref("games").limitToLast(60).once("value").then(s=>s.val()),
+  ]);
+  const lArr=lessons?Object.values(lessons):[];
+  const done=lArr.filter(l=>l.completed).length;
+  const stars=lArr.reduce((a,l)=>a+(l.stars||0),0);
+  const qAvg=lArr.length?(lArr.reduce((a,l)=>a+(l.bestScore||0),0)/(lArr.length*3)*100):0;
+  const pzArr=puz?Object.values(puz):[];
+  const solved=pzArr.filter(p=>p.solved).length;
+  const gArr=gamesSnap?Object.values(gamesSnap).filter(g=>(g.profileIds||[]).includes(pid)):[];
+  const vsc=gArr.filter(g=>g.type==="vs-computer");
+  const w=vsc.filter(g=>g.result==="win").length, l=vsc.filter(g=>g.result==="loss").length, d=vsc.filter(g=>g.result==="draw").length;
+  const vsk=gArr.filter(g=>g.type==="vs-kid").length;
+  const actArr=acts?Object.entries(acts).map(([id,a])=>a).sort((a,b)=>b.createdAt-a.createdAt):[];
+  const coachArr=coach?Object.entries(coach).map(([id,c])=>Object.assign({id},c)).sort((a,b)=>b.createdAt-a.createdAt).slice(0,5):[];
+  const ago=ts=>{const m=Math.floor((Date.now()-ts)/60000);return m<1?"just now":m<60?m+"m ago":Math.floor(m/60)+"h ago";};
+  $("#ptab").innerHTML=`
+  <div class="grid2">
+    <div><div class="kv"><span>Level / XP</span><b>${(skill&&skill.level)||1} · ${(skill&&skill.xp)||0} XP</b></div>
+    <div class="kv"><span>🔥 Streak</span><b>${(streak&&streak.count)||0} days</b></div>
+    <div class="kv"><span>📚 Lessons</span><b>${done}/12 · ${stars}★</b></div>
+    <div class="kv"><span>📝 Quiz average</span><b>${Math.round(qAvg)}%</b></div></div>
+    <div><div class="kv"><span>🧩 Puzzles</span><b>${solved} solved · rating ${puzR||400}</b></div>
+    <div class="kv"><span>🤖 vs Computer</span><b>${w}W / ${l}L / ${d}D</b></div>
+    <div class="kv"><span>👧🧒 vs Family</span><b>${vsk} games</b></div>
+    <div class="kv"><span>🏅 Badges</span><b>${badges?Object.keys(badges).length:0}</b></div></div>
+  </div>
+  <h3>Recent activity</h3>
+  ${actArr.length?actArr.map(a=>`<div class="kv"><span>${esc(a.type)} — ${esc(a.detail||"")}</span><span class="muted">${ago(a.createdAt)}</span></div>`).join(""):'<p class="muted">No activity yet.</p>'}
+  <h3>Coaching log (Stella)</h3>
+  ${coachArr.length?coachArr.map(c=>`<div class="kv"><span><b>${esc(c.kind)}</b> — ${esc(c.text)}</span><span class="muted">${ago(c.createdAt)}</span></div>`).join(""):'<p class="muted">No coaching notes yet.</p>'}`;
+}
+
+/* ============================ 3P. BOOT =================================== */
+window.back=back; window.go=go;
+// expose handlers used by inline onclick
+Object.assign(window,{gateCreate,gateJoin,doCreateFamily,doJoinFamily,tapProfile,tapParent,checkParentPin,
+  addProfile,pickColor,doAddProfile,startLesson,answerQuiz,bonusChallenge,retrySimilarPuzzle,ackCoaching,
+  switchProfile,drawPlaySetup,startComputerGame,offerDraw,resignGame,createLiveGame,cancelLive,joinLiveUI,
+  doJoinLive,resignLive,leaveLive,startPassPlay,parentTab});
+boot();
+</script>
+</body>
+</html>
