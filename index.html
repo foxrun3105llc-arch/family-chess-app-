@@ -35,7 +35,7 @@
 /* ============================ 1. CSS ================================== */
 :root{
   --cream:#FFF9F1; --peach:#FFE3C9; --mint:#D3EEDC; --lavender:#E2D8F7;
-  --sky:#CFE8FA; --butter:#FFEBA8; --rose:#FFD9E0; --coral:#FFB59E;
+  --sky:#CFE8FA; --butter:#FFEBA8; --rose:#FFD9E0; --coral:#FFB59E; --grape:#DCD0F7;
   --ink:#4A4458; --ink-soft:#7A7390; --white:#FFFFFF;
   --sq-light:#F6E7C8; --sq-dark:#D9A97E;
   --shadow:0 6px 18px rgba(120,100,140,.14);
@@ -60,7 +60,7 @@ p{font-size:17px;line-height:1.55;color:var(--ink);}
 .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;margin:14px 0;}
 .card.peach{background:var(--peach);} .card.mint{background:var(--mint);}
 .card.lavender{background:var(--lavender);} .card.sky{background:var(--sky);}
-.card.butter{background:var(--butter);} .card.rose{background:var(--rose);}
+.card.butter{background:var(--butter);} .card.rose{background:var(--rose);} .card.grape{background:var(--grape);}
 .btn{
   display:inline-block;border:none;cursor:pointer;font-weight:700;color:var(--ink);
   font-size:19px;padding:16px 26px;border-radius:18px;margin:8px 6px 8px 0;
@@ -94,8 +94,8 @@ p{font-size:17px;line-height:1.55;color:var(--ink);}
 /* chess board */
 .board-wrap{display:flex;justify-content:center;margin:12px 0;}
 .board{display:grid;grid-template-columns:repeat(8,1fr);width:min(92vw,560px);aspect-ratio:1/1;
-  border-radius:14px;overflow:hidden;box-shadow:var(--shadow);border:6px solid #B9835A;}
-.square{position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+  border-radius:14px;overflow:hidden;box-shadow:var(--shadow);border:6px solid #B9835A;position:relative;}
+.square{position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer;aspect-ratio:1/1;}
 .square.light{background:var(--sq-light);} .square.dark{background:var(--sq-dark);}
 .square .piece{font-size:calc(min(92vw,560px)/8*0.72);line-height:1;pointer-events:none;}
 .piece.w{color:#FFFDF7;text-shadow:0 0 3px #5a4a3a,0 2px 2px rgba(0,0,0,.35);}
@@ -108,6 +108,11 @@ p{font-size:17px;line-height:1.55;color:var(--ink);}
 .square .coord{position:absolute;font-size:11px;font-weight:700;opacity:.65;pointer-events:none;}
 .coord.rank{top:2px;left:4px;} .coord.file{bottom:2px;right:5px;}
 .square.light .coord{color:#a07c4f;} .square.dark .coord{color:#f6e7c8;}
+.piece-ghost{position:absolute;z-index:5;pointer-events:none;line-height:1;transition:transform .55s ease-in-out;}
+.piece-ghost.w{color:#FFFDF7;text-shadow:0 0 3px #5a4a3a,0 2px 2px rgba(0,0,0,.35);}
+.piece-ghost.b{color:#3B3345;text-shadow:0 1px 1px rgba(255,255,255,.35);}
+.iconbtn{background:var(--white);border:2px solid var(--peach);border-radius:50%;width:44px;height:44px;
+  font-size:20px;cursor:pointer;flex:none;display:flex;align-items:center;justify-content:center;}
 .tray{display:flex;flex-wrap:wrap;gap:2px;min-height:34px;align-items:center;font-size:24px;margin:6px 0;}
 .movelist{background:#FBF7EF;border-radius:14px;padding:10px 14px;max-height:150px;overflow-y:auto;font-size:15px;margin:8px 0;}
 .movelist table{width:100%;border-collapse:collapse;} .movelist td{padding:3px 6px;}
@@ -269,9 +274,74 @@ function back(){
 function topbar(title, showBack=true){
   const chip = PROFILE
     ? `<div class="profile-chip">${avatarHTML(PROFILE,32)}<span>${esc(PROFILE.name)}</span></div>` : "";
-  return `<div class="topbar">${showBack?`<button class="backbtn" onclick="back()">‹</button>`:""}<h2 style="margin:0">${title}</h2>${chip}</div>`;
+  const vb = `<button class="iconbtn" id="voicebtn" onclick="toggleVoice()" title="Story voice on/off">${VOICE_ON?"🔊":"🔇"}</button>`;
+  return `<div class="topbar">${showBack?`<button class="backbtn" onclick="back()">‹</button>`:""}<h2 style="margin:0">${title}</h2>${chip}${vb}</div>`;
 }
+
+/* ============================ VOICE (story narration) ============================
+   Reads lesson steps aloud using the iPad's own voices (including Siri voices
+   on iPadOS 16+). Toggle in the topbar; choice remembered per device. */
+const LS_VOICE="cla_voice_on";
+let VOICE_ON=true;
+try{ VOICE_ON = localStorage.getItem(LS_VOICE)!=="0"; }catch(e){}
+let VOICE_PICKED=null;
+function pickVoice(){
+  try{
+    const vs=(window.speechSynthesis&&speechSynthesis.getVoices())||[];
+    if(!vs.length) return null;
+    const en=vs.filter(v=>/^en([-_]|$)/i.test(v.lang||""));
+    const pool=en.length?en:vs;
+    return pool.find(v=>/siri/i.test(v.name))||pool.find(v=>/natural|neural|premium|enhanced/i.test(v.name))||pool[0]||null;
+  }catch(e){ return null; }
+}
+function cleanSpeech(t){
+  return (t||"").replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/gu,"").replace(/\s+/g," ").trim();
+}
+function speak(text){
+  stopSpeak();
+  text=cleanSpeech(text);
+  if(!VOICE_ON||!text) return;
+  try{
+    if(!("speechSynthesis" in window)) return;
+    if(!VOICE_PICKED) VOICE_PICKED=pickVoice();
+    const u=new SpeechSynthesisUtterance(text);
+    if(VOICE_PICKED) u.voice=VOICE_PICKED;
+    u.rate=0.95; u.pitch=1.05;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+function stopSpeak(){ try{ if("speechSynthesis" in window) speechSynthesis.cancel(); }catch(e){} }
+function speakWait(text){
+  return new Promise(res=>{
+    stopSpeak();
+    text=cleanSpeech(text);
+    if(!VOICE_ON||!text){ res(); return; }
+    (async()=>{
+      try{
+        if(!("speechSynthesis" in window)){ res(); return; }
+        await wait(120);
+        if(!VOICE_PICKED) VOICE_PICKED=pickVoice();
+        const u=new SpeechSynthesisUtterance(text);
+        if(VOICE_PICKED) u.voice=VOICE_PICKED;
+        u.rate=0.95; u.pitch=1.05;
+        let done=false;
+        const fin=()=>{ if(!done){ done=true; res(); } };
+        u.onend=fin; u.onerror=fin;
+        setTimeout(fin,15000);
+        speechSynthesis.speak(u);
+      }catch(e){ res(); }
+    })();
+  });
+}
+function toggleVoice(){
+  VOICE_ON=!VOICE_ON;
+  try{ localStorage.setItem(LS_VOICE, VOICE_ON?"1":"0"); }catch(e){}
+  if(!VOICE_ON) stopSpeak();
+  const b=document.getElementById("voicebtn"); if(b) b.textContent=VOICE_ON?"🔊":"🔇";
+}
+try{ if("speechSynthesis" in window){ speechSynthesis.onvoiceschanged=function(){ VOICE_PICKED=null; }; } }catch(e){}
 function render(screen, arg){
+  stopSpeak();
   LIVE_UNSUBS.forEach(u=>{try{u();}catch(e){}}); LIVE_UNSUBS=[];
   window.scrollTo(0,0);
   ({gate:renderGate, profiles:renderProfiles, home:renderHome, lesson:renderLesson,
@@ -686,6 +756,70 @@ const LESSONS = [
     {q:"With King + Queen vs King, you…", choices:["Can always force mate","Should offer a draw","Might lose","Need 50 moves"], answer:0, explain:"It's a forced win with the boxing technique!"},
     {q:"What must you avoid in a winning endgame?", choices:["Checkmate","Stalemate","Captures","Checks"], answer:1, explain:"Stalemate draws — always give them a legal move until mate!"},
   ]},
+{ id:"tactics2", title:"Trickier Tactics", sub:"Skewers, discovered attacks & double checks",
+  steps:[
+    {t:"say", text:"You already know pins and forks — sneaky ways to win pieces! Now meet their trickier cousins: the SKEWER, the DISCOVERED ATTACK, and the DOUBLE CHECK. Watch them in action! 🎬"},
+    {t:"demo", fen:"8/8/8/5q2/4k3/8/8/1B4K1 w - - 0 1", text:"The SKEWER: attack the king, and win the piece hiding behind it! Watch our bishop.",
+     script:[
+      {from:"b1",to:"c2",text:"Bishop to c2 — CHECK! The black king must move... and look who's standing behind him!"},
+      {from:"e4",to:"d5",text:"The king runs to d5. But now the queen has no bodyguard!"},
+      {from:"c2",to:"f5",text:"Bishop takes the queen! Skewer complete — the king was the shield, and shields have to move!"}]},
+    {t:"move", prompt:"Your turn — SKEWER! Slide the rook to e1 to check the king and win the queen behind it.", fen:"4q3/8/8/8/4k3/8/8/1R4K1 w - - 0 1", from:"b1", targets:["e1"], after:"CHECK! The king must run, and the queen is next. Beautiful skewer! 🎯"},
+    {t:"demo", fen:"4k3/8/8/8/8/8/3N4/3RK3 w - - 0 1", text:"The DISCOVERED ATTACK: one piece moves away and UNCOVERS another piece's attack. Like opening a curtain!",
+     script:[
+      {from:"d2",to:"f3",text:"The knight hops to f3... and suddenly the rook on d1 is staring straight at the black king!"},
+      {from:"e8",to:"f8",text:"The black king shuffles aside... but it's too late!"},
+      {from:"d1",to:"d8",text:"DISCOVERED CHECK! The knight's hop uncovered the rook's laser beam down the file!"}]},
+    {t:"demo", fen:"4k3/3N4/8/1B6/8/8/8/4K3 w - - 0 1", text:"The DOUBLE CHECK: TWO pieces giving check at once! It's the most powerful move in chess.",
+     script:[
+      {from:"d7",to:"f6",text:"Knight jumps to f6 — CHECK! And it uncovered the bishop, which ALSO checks the king! Double check!"},
+      {from:"e8",to:"d8",text:"Against a double check the king MUST move — you can't block two attackers or capture them both!"}]},
+    {t:"say", text:"Remember the trio: SKEWER (attack the king, win the piece behind), DISCOVERED ATTACK (move one piece, uncover another's attack), DOUBLE CHECK (two checks — the king must run!). Tactics win pieces, and pieces win games! 🧙"},
+  ],
+  quiz:[
+    {q:"In a SKEWER, which piece do you attack first?", choices:["The king — it must move, exposing the piece behind","The queen","A pawn","The weakest piece"], answer:0, explain:"Check the king FIRST! It has to move, and then you grab the juicy piece hiding behind it."},
+    {q:"What is a DISCOVERED ATTACK?", choices:["Attacking with two knights at once","Moving one piece to uncover another piece's attack","Castling queenside","Promoting a pawn"], answer:1, explain:"Like opening a curtain — one piece steps aside and another piece's attack is revealed!"},
+    {q:"Your opponent plays DOUBLE CHECK on you. What must you do?", choices:["Move the king","Block one attacker","Capture one attacker","Claim a draw"], answer:0, explain:"You can't block or capture TWO attackers at once — the king must move!"},
+  ]},
+{ id:"mates", title:"Checkmate Patterns", sub:"Back rank & the ladder",
+  steps:[
+    {t:"say", text:"Champions don't stumble into checkmate — they KNOW patterns! Master these two famous ones and you'll finish games like a pro. 🏆"},
+    {t:"demo", fen:"6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", text:"The BACK-RANK MATE: the king is trapped on the back rank by his OWN pawns. All it takes is one rook!",
+     script:[
+      {from:"a1",to:"a8",text:"Rook crashes to a8 — CHECKMATE! The king can't step forward (his pawns block him) and can't escape sideways. His own army became his prison!"}]},
+    {t:"tap", prompt:"Tap the mating square! Deliver back-rank mate.", fen:"6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", targets:["a8"], after:"BOOM! Back-rank mate! The pawns did the trapping, the rook did the finishing. 💥"},
+    {t:"demo", fen:"7k/8/8/8/8/8/1R6/R5K1 w - - 0 1", text:"The LADDER MATE: two rooks take turns climbing, squeezing the king tighter and tighter!",
+     script:[
+      {from:"a1",to:"a7",text:"Rook number one climbs to the seventh rank — the king is squeezed!"},
+      {from:"h8",to:"g8",text:"The king shuffles to g8..."},
+      {from:"b2",to:"b8",text:"Rook number two joins the party — CHECKMATE! The rooks built a ladder the king can't climb down!"}]},
+    {t:"move", prompt:"Your turn — deliver back-rank mate with the rook!", fen:"7k/5ppp/8/8/8/8/8/3R2K1 w - - 0 1", from:"d1", targets:["d8"], after:"MATE! One rook, one trapped king. Pattern recognized! 🏆"},
+    {t:"say", text:"Two patterns, endless wins: BACK RANK (rook to the 8th when pawns trap the king) and the LADDER (two rooks climbing together). In your games, always be hunting for them! 🔍"},
+  ],
+  quiz:[
+    {q:"What is BACK-RANK MATE?", choices:["Mating a king trapped on his back rank by his own pawns","Castling queenside","Promoting to a rook","Agreeing to a draw"], answer:0, explain:"His own pawns block his escape — one rook (or queen) on the back rank finishes it!"},
+    {q:"In the LADDER mate, the two rooks…", choices:["Both hide behind pawns","Swap places with each other","Promote to queens","Take turns climbing ranks until the king is trapped"], answer:3, explain:"One rook climbs, the king shuffles, the other rook delivers — teamwork!"},
+    {q:"You spot the enemy king stuck behind his own pawns. Your plan?", choices:["Trade queens immediately","March your king forward","Get a rook or queen to the back rank","Offer a draw"], answer:2, explain:"Back rank + trapped king = start hunting for mate!"},
+  ]},
+{ id:"strategy", title:"Think Like a Champion", sub:"Activity, weak squares & king safety",
+  steps:[
+    {t:"say", text:"Tactics win pieces — but STRATEGY wins games! Strategy means: put every piece on its best square, keep your king safe, and always ask: what is my opponent threatening? 🧠"},
+    {t:"demo", fen:"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", text:"Watch a champion's first five moves: every piece marches toward the center!",
+     script:[
+      {from:"e2",to:"e4",text:"e4! Fight for the center from move one."},
+      {from:"e7",to:"e5",text:"Black answers the same way."},
+      {from:"g1",to:"f3",text:"Knights before bishops — Nf3 attacks the center!"},
+      {from:"b8",to:"c6",text:"Black develops a knight too."},
+      {from:"f1",to:"c4",text:"Bishop to its happiest square, eyeing the middle! Developed, centered, ready to castle — champion thinking!"}]},
+    {t:"board", fen:"3k4/8/8/3N4/8/8/8/4K3 w - - 0 1", hl:["d5"], text:"See this knight on d5? No black pawn can ever chase it away — that's an OUTPOST! A knight on an outpost is worth almost a rook. Always look for squares your pieces can't be kicked from!"},
+    {t:"say", text:"KING SAFETY: castle early! A king stuck in the middle when the center opens up is a king in danger. Tuck him behind his pawns — then attack with everything else! 👑"},
+    {t:"say", text:"The champion's thinking routine — ask before EVERY move: 1) What is my opponent threatening? 2) What are MY checks, captures and threats? Never move on autopilot! ♞"},
+  ],
+  quiz:[
+    {q:"In the opening, a champion…", choices:["Develops pieces, fights for the center, castles early","Brings the queen out on move 2","Pushes only pawns","Trades everything fast"], answer:0, explain:"Develop, center, castle — the golden opening recipe!"},
+    {q:"A knight parked where no pawn can attack it sits on…", choices:["A broken square","The edge (knights love edges!)","An outpost — a super-strong square","A trap"], answer:2, explain:"Outposts turn knights into monsters — nearly as strong as rooks!"},
+    {q:"Before every move, a champion asks…", choices:["What is my opponent threatening?","What's for dinner?","How many moves until lunch?","Whose turn is it?"], answer:0, explain:"Checks, captures, threats — yours AND theirs. Every single move!"},
+  ]},
 ];
 
 /* ============================ 3H. LESSON PLAYER ========================== */
@@ -730,7 +864,7 @@ async function renderHome(){
     <button class="btn sky big" onclick="go('play')">🤖 Play computer</button>
   </div>
   <button class="btn lavender big" onclick="go('live')">👧🧒 Play family</button>
-  <h2>📚 Lessons <span class="muted" style="font-size:15px">${doneCount}/12 done</span></h2>
+  <h2>📚 Lessons <span class="muted" style="font-size:15px">${doneCount}/${LESSONS.length} done</span></h2>
   ${rows}
   <div class="center" style="margin-top:14px">
     <button class="btn ghost" onclick="switchProfile()">Switch player</button>
@@ -748,12 +882,21 @@ function renderLesson(){
   if(s.t==="say"){
     view.innerHTML = head + `<div class="card peach"><p style="font-size:19px">${esc(s.text)}</p>
       <button class="btn primary big" onclick="LES.step++;render('lesson')">Next →</button></div>`;
+    speak(s.text);
   } else if(s.t==="board"){
     view.innerHTML = head + `<div class="card"><p style="font-size:18px">${esc(s.text)}</p>
       <div class="board-wrap"><div class="board" id="lb"></div></div>
       <button class="btn primary big" onclick="LES.step++;render('lesson')">Got it! →</button></div>`;
     const g = new Chess(s.fen);
     drawBoard($("#lb"), g, {highlights:arrayToHl(s.hl), interactive:false});
+    speak(s.text);
+  } else if(s.t==="demo"){
+    view.innerHTML = head + `<div class="card grape"><p style="font-size:18px">${esc(s.text)}</p>
+      <div class="board-wrap"><div class="board" id="lb"></div></div>
+      <div id="demotxt" class="center" style="min-height:54px;font-size:17px;font-weight:600"></div>
+      <div class="center"><button class="btn sky" id="demoreplay" style="display:none" onclick="replayDemo()">↻ Replay</button>
+      <button class="btn primary big" id="demonext" style="display:none" onclick="LES.step++;render('lesson')">Next →</button></div></div>`;
+    playDemo(s);
   } else if(s.t==="tap"){
     view.innerHTML = head + `<div class="card sky"><h2>${esc(s.prompt)}</h2>
       <p class="muted">Tap the glowing square(s).</p>
@@ -769,14 +912,71 @@ function renderLesson(){
           logActivity("practice", L.id+" tap"); setTimeout(()=>{LES.step++;render("lesson");},1400); }
       } else { $("#tapfb").innerHTML=`<div class="feedback try">${tryAgain()} Look for the glowing square.</div>`; }
     }});
+    speak(s.prompt);
   } else if(s.t==="move"){
     view.innerHTML = head + `<div class="card mint"><h2>${esc(s.prompt)}</h2>
       <div class="board-wrap"><div class="board" id="lb"></div></div>
       <div id="movefb"></div></div>`;
     runLessonMove(s, L);
+    speak(s.prompt);
   }
 }
 function arrayToHl(arr){ const o={}; (arr||[]).forEach(s=>o[s]="hint"); return o; }
+
+/* animated demo step: pieces slide by themselves while the story is read aloud.
+   step = {t:"demo", text, fen, script:[{from,to,text,pause}]} */
+function wait(ms){ return new Promise(r=>setTimeout(r,ms)); }
+function sqCenter(el, sq){
+  const s=el.querySelector('[data-sq="'+sq+'"]');
+  const r=s.getBoundingClientRect(), w=el.getBoundingClientRect();
+  return {x:r.left-w.left+r.width/2, y:r.top-w.top+r.height/2, size:r.width};
+}
+function animateMove(el, game, from, to){
+  return new Promise(resolve=>{
+    const piece=game.get(from);
+    const finish=()=>{ game.move({from:from,to:to,promotion:"q"}); resolve(); };
+    if(!piece){ finish(); return; }
+    try{
+      const c1=sqCenter(el,from), c2=sqCenter(el,to);
+      const ghost=document.createElement("div");
+      ghost.className="piece-ghost "+piece.color;
+      ghost.textContent=GLYPH[piece.type];
+      ghost.style.fontSize=(c1.size*0.72)+"px";
+      ghost.style.left=(c1.x-c1.size*0.36)+"px";
+      ghost.style.top=(c1.y-c1.size*0.36)+"px";
+      el.appendChild(ghost);
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        ghost.style.transform="translate("+(c2.x-c1.x)+"px,"+(c2.y-c1.y)+"px)";
+      }));
+      setTimeout(()=>{ try{ghost.remove();}catch(e){} finish(); },620);
+    }catch(e){ finish(); }
+  });
+}
+async function playDemo(s){
+  const g=new Chess(s.fen);
+  const el=$("#lb"); if(!el) return;
+  drawBoard(el, g, {interactive:false});
+  await speakWait(s.text);
+  for(const st of (s.script||[])){
+    if(!document.body.contains(el)) return;
+    const dt=$("#demotxt"); if(dt) dt.textContent=st.text||"";
+    const sayP = st.text ? speakWait(st.text) : Promise.resolve();
+    if(st.from&&st.to){
+      drawBoard(el, g, {highlights:arrayToHl([st.from]), interactive:false});
+      await wait(550);
+      if(!document.body.contains(el)) return;
+      await animateMove(el, g, st.from, st.to);
+      if(!document.body.contains(el)) return;
+      drawBoard(el, g, {highlights:arrayToHl([st.to]), interactive:false});
+    }
+    await sayP;
+    await wait(st.pause||900);
+  }
+  if(!document.body.contains(el)) return;
+  const nx=$("#demonext"); if(nx) nx.style.display="";
+  const rp=$("#demoreplay"); if(rp) rp.style.display="";
+}
+function replayDemo(){ const s=LES.lesson.steps[LES.step]; if(s&&s.t==="demo") playDemo(s); }
 
 /* lesson interactive move: tap `from`, then a target; fallback accepts any legal move if targets illegal */
 function runLessonMove(s, L){
@@ -828,6 +1028,7 @@ function renderQuiz(){
    <p style="font-size:20px"><b>${esc(q.q)}</b></p>
    <div id="choices">${q.choices.map((c,i)=>`<button class="choice" onclick="answerQuiz(${i})">${esc(c)}</button>`).join("")}</div>
    <div id="qfb"></div></div>`;
+  speak(q.q);
 }
 function answerQuiz(i){
   const q=QUIZ.lesson.quiz[QUIZ.q];
@@ -868,7 +1069,7 @@ async function addXP(n){
   await dbSet(`progress/${PROFILE.id}/skill`,sk);
 }
 async function maybeBadge(lessonId, stars){
-  const map={knight:"Knight Jumper 🐴",check:"Checkmate Champ 🏆",tactics:"Tactic Wizard 🧙",endgame:"Endgame Expert 🎯",pawn:"Pawn Promoter 👑"};
+  const map={knight:"Knight Jumper 🐴",check:"Checkmate Champ 🏆",tactics:"Tactic Wizard 🧙",endgame:"Endgame Expert 🎯",pawn:"Pawn Promoter 👑",tactics2:"Trick Tactician 🎯",mates:"Mating Master 👑",strategy:"Grand Strategist 🧠"};
   const b=map[lessonId];
   if(b&&stars>=2){ const v=(await dbGet(`progress/${PROFILE.id}/badges`))||{}; if(!v[b]){ v[b]=Date.now(); await dbSet(`progress/${PROFILE.id}/badges`,v); setTimeout(()=>toast("New badge: "+b+"!"),1200);} }
 }
@@ -1471,7 +1672,7 @@ async function parentTab(pid,el){
   <div class="grid2">
     <div><div class="kv"><span>Level / XP</span><b>${(skill&&skill.level)||1} · ${(skill&&skill.xp)||0} XP</b></div>
     <div class="kv"><span>🔥 Streak</span><b>${(streak&&streak.count)||0} days</b></div>
-    <div class="kv"><span>📚 Lessons</span><b>${done}/12 · ${stars}★</b></div>
+    <div class="kv"><span>📚 Lessons</span><b>${done}/${LESSONS.length} · ${stars}★</b></div>
     <div class="kv"><span>📝 Quiz average</span><b>${Math.round(qAvg)}%</b></div></div>
     <div><div class="kv"><span>🧩 Puzzles</span><b>${solved} solved · rating ${puzR||400}</b></div>
     <div class="kv"><span>🤖 vs Computer</span><b>${w}W / ${l}L / ${d}D</b></div>
@@ -1490,7 +1691,7 @@ window.back=back; window.go=go;
 Object.assign(window,{gateCreate,gateJoin,doCreateFamily,doJoinFamily,tapProfile,tapParent,checkParentPin,
   addProfile,pickColor,doAddProfile,startLesson,answerQuiz,bonusChallenge,retrySimilarPuzzle,ackCoaching,
   switchProfile,drawPlaySetup,startComputerGame,offerDraw,resignGame,createLiveGame,cancelLive,joinLiveUI,
-  doJoinLive,resignLive,leaveLive,startPassPlay,parentTab,resetFamily});
+  doJoinLive,resignLive,leaveLive,startPassPlay,parentTab,resetFamily,replayDemo,toggleVoice});
 boot();
 </script>
 </body>
