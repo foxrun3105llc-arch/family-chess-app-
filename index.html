@@ -630,7 +630,8 @@ function renderProfiles(){
   const parents = Object.entries(PROFILES).filter(([,p])=>p.role==="parent");
   view.innerHTML = `
   <div class="center" style="margin:18px 0 6px"><div class="big-emoji">♞</div>
-  <h1>Who is playing?</h1></div>
+  <h1>Who is playing?</h1>
+  <button class="btn mint" onclick="addProfile()">＋ Add a player</button></div>
   ${kids.map(([id,p])=>`
     <div class="lesson-row" onclick="tapProfile('${id}')">
       ${avatarHTML(p,52)}
@@ -645,7 +646,7 @@ function renderProfiles(){
       <div style="font-size:26px">›</div></div>`).join("")}
     <button class="btn ghost" onclick="addProfile()">＋ Add a profile</button>
   </div>
-  <p class="center muted">Each iPad remembers its player — Ria stays logged in on hers, Aarika on his.</p>`;
+  <p class="center muted">Each iPad remembers its player — everyone stays logged in on their own device.</p>`;
 }
 async function tapProfile(pid){
   await loginProfile(pid, true);
@@ -706,7 +707,7 @@ async function doAddProfile(){
   if(!name){ toast("Please type a name."); return; }
   const meta = await dbGet("meta");
   if(!meta || meta.parentPinHash!==hashPin(pin)){ toast("That PIN didn't match."); return; }
-  const role = age>=18||age===0 ? (age===0?"parent":"kid") : "kid";
+  const role = (age===0||age>=18) ? "parent" : "kid";
   const key = (await dbPush("profiles",{name, age:age||null, color, role, createdAt:Date.now()})).key;
   if(role==="kid"){ await dbSet(`progress/${key}/skill`,{level:1,xp:0}); await dbSet(`progress/${key}/puzzleRating`,400); await dbSet(`progress/${key}/streak`,{count:0,lastDay:""}); }
   await loadProfiles(); toast(name+" joined the family!"); render("profiles");
@@ -1020,6 +1021,7 @@ async function renderHome(){
   <h2>📚 Lessons <span class="muted" style="font-size:15px">${doneCount}/${LESSONS.length} done</span></h2>
   ${rows}
   <div class="center" style="margin-top:14px">
+    ${PROFILE.role==="parent"?`<button class="btn lavender" onclick="NAV=['parent'];render('parent')">← Parent dashboard</button>`:""}
     <button class="btn ghost" onclick="switchProfile()">Switch player</button>
   </div>`;
 }
@@ -1788,12 +1790,22 @@ async function renderParent(){
   <div class="tabs">${kids.map(([id,p],i)=>`<button class="tab${i===0?" sel":""}" onclick="parentTab('${id}',this)">${avatarHTML(p,26)} ${esc(p.name)}</button>`).join("")}</div>
   <div id="ptab"></div>
   <div class="center" style="margin-top:10px"><button class="btn ghost" onclick="switchProfile()">Switch player</button></div></div>
+  <div class="card mint" style="margin-top:12px"><h3>🎮 Play & learn as ${esc(PROFILE.name)}</h3>
+  <p class="muted">Get your own lessons, puzzles and games — tutorials, play vs the computer, and family games, just like the kids have. Your progress stays separate under your name.</p>
+  <div class="center"><button class="btn primary big" onclick="parentPlayMode()">Enter play mode →</button></div></div>
   <div class="card peach" style="margin-top:12px"><h3>🔑 Family code</h3>
   <p class="muted">On your other iPad, choose <b>Join with a family code</b> and type this in:</p>
   <div class="code-big">${esc(FAM||"")}</div>
   <div class="center" style="margin-top:10px"><button class="btn ghost" onclick="resetFamily()">Start over with a new family</button></div>
   <p class="muted center">Erases all profiles, progress and games, then starts fresh. Only use while setting up.</p></div>`;
   if(kids.length) parentTab(kids[0][0], $(".tab"));
+}
+/* Parent play mode: grown-ups get the full lessons + play experience under their own profile */
+async function parentPlayMode(){
+  if(!PROFILE||PROFILE.role!=="parent"){ NAV=["profiles"]; render("profiles"); return; }
+  await loadCoaching();
+  try{ await touchStreak(true); }catch(e){}
+  NAV=["parent","home"]; render("home");
 }
 async function resetFamily(){
   if(!confirm("Start over? This erases ALL profiles, progress and games for this family.")) return;
@@ -1826,7 +1838,8 @@ async function parentTab(pid,el){
   const ago=ts=>{const m=Math.floor((Date.now()-ts)/60000);return m<1?"just now":m<60?m+"m ago":Math.floor(m/60)+"h ago";};
   $("#ptab").innerHTML=`
   <div class="grid2">
-    <div><div class="kv"><span>Level / XP</span><b>${(skill&&skill.level)||1} · ${(skill&&skill.xp)||0} XP</b></div>
+    <div><div class="kv"><span>🎂 Age</span><b>${esc(String((PROFILES[pid]&&PROFILES[pid].age)||"—"))}</b></div>
+    <div class="kv"><span>Level / XP</span><b>${(skill&&skill.level)||1} · ${(skill&&skill.xp)||0} XP</b></div>
     <div class="kv"><span>🔥 Streak</span><b>${(streak&&streak.count)||0} days</b></div>
     <div class="kv"><span>📚 Lessons</span><b>${done}/${LESSONS.length} · ${stars}★</b></div>
     <div class="kv"><span>📝 Quiz average</span><b>${Math.round(qAvg)}%</b></div></div>
@@ -1847,7 +1860,7 @@ window.back=back; window.go=go;
 Object.assign(window,{gateCreate,gateJoin,doCreateFamily,doJoinFamily,tapProfile,tapParent,checkParentPin,
   addProfile,pickColor,doAddProfile,startLesson,answerQuiz,bonusChallenge,retrySimilarPuzzle,ackCoaching,
   switchProfile,drawPlaySetup,startComputerGame,offerDraw,resignGame,createLiveGame,cancelLive,joinLiveUI,
-  doJoinLive,resignLive,leaveLive,startPassPlay,parentTab,resetFamily,replayDemo,toggleVoice});
+  doJoinLive,resignLive,leaveLive,startPassPlay,parentTab,parentPlayMode,resetFamily,replayDemo,toggleVoice});
 boot();
 </script>
 </body>
