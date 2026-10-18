@@ -11,6 +11,11 @@ across devices with no login required on the kids' iPads.
 
 ## Revisions
 
+### Rev 5 — 2026-10-18
+- Resigning a game now asks for confirmation first, in both live family games
+  and vs-computer games — a mis-tapped button can no longer end a game (and
+  record a bogus result) by accident.
+
 ### Rev 4 — 2026-10-17
 - Parent play mode: grown-ups get their own lessons, puzzles, vs-computer games
   and family games under their own profile via "Enter play mode" on the parent
