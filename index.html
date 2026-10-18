@@ -1577,7 +1577,7 @@ function updateMoveList(){
   el.innerHTML=html+"</table>"; el.scrollTop=el.scrollHeight;
 }
 function offerDraw(){ if(!PG.over){ PG.over=true; finishComputerGame("draw","You agreed a draw — well played!"); } }
-function resignGame(){ if(!PG.over){ PG.over=true; finishComputerGame("loss","Good game! Every loss teaches something. 💪"); } }
+function resignGame(){ if(!PG.over && confirm("Resign this game? The computer will win — tap Cancel to keep playing!")){ PG.over=true; finishComputerGame("loss","Good game! Every loss teaches something. 💪"); } }
 async function endComputerGame(){
   const g=PG.game; let result,msg;
   if(g.in_checkmate()){ const kidWon=g.turn()!==PG.kidColor; result=kidWon?"win":"loss";
@@ -1720,6 +1720,7 @@ async function recordLiveResult(winner){
 }
 async function resignLive(){
   if(!LG||!LG.data||LG.data.status!=="active")return;
+  if(!confirm("Resign this game? Your opponent will win — tap Cancel to keep playing!"))return;
   const myColor=LG.data.white===PROFILE.id?"w":"b";
   const winner=myColor==="w"?"b":"w";
   await recordLiveResult(winner);
