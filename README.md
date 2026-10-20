@@ -11,6 +11,11 @@ across devices with no login required on the kids' iPads.
 
 ## Revisions
 
+### Rev 6 — 2026-10-19
+- Vs-computer games now have an Undo button: take back the last full round
+  (your move + the computer's reply), up to 3 times per game. Captures,
+  castling rights and the move list are all restored correctly.
+
 ### Rev 5 — 2026-10-18
 - Resigning a game now asks for confirmation first, in both live family games
   and vs-computer games — a mis-tapped button can no longer end a game (and
