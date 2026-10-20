@@ -1512,7 +1512,7 @@ function drawPlaySetup(){
 }
 function startComputerGame(){
   let kc=PG.kidColor; if(kc==="r") kc=Math.random()<0.5?"w":"b";
-  PG={game:new Chess(), kidColor:kc, aiLevel:PG.aiLevel, sel:null, lastMove:null, over:false, moves:0};
+  PG={game:new Chess(), kidColor:kc, aiLevel:PG.aiLevel, sel:null, lastMove:null, over:false, moves:0, undosLeft:3};
   NAV.push("playgame"); drawPlayGame();
   if(PG.kidColor==="b") setTimeout(aiMove,700);
 }
@@ -1523,6 +1523,7 @@ function drawPlayGame(){
   <div id="gmsg"></div>${capturedTraysHTML(g)}
   <div class="movelist" id="ml"></div>
   <div class="center">
+    <button class="btn sky" onclick="undoMove()" ${canUndo()?"":"disabled style=\"opacity:.45\""}>↩️ Undo (${PG.undosLeft} left)</button>
     <button class="btn ghost" onclick="offerDraw()">🤝 Draw?</button>
     <button class="btn rose" onclick="resignGame()">🏳️ Resign</button>
     <button class="btn mint" onclick="render('play')">↻ New game</button>
@@ -1577,6 +1578,22 @@ function updateMoveList(){
   el.innerHTML=html+"</table>"; el.scrollTop=el.scrollHeight;
 }
 function offerDraw(){ if(!PG.over){ PG.over=true; finishComputerGame("draw","You agreed a draw — well played!"); } }
+/* Take back the last full round (kid's move + computer's reply). Max 3 per game. */
+function canUndo(){
+  if(!PG||PG.over||PG.undosLeft<=0) return false;
+  const hlen=PG.game.history().length;
+  return PG.game.turn()===PG.kidColor ? hlen>=2 : hlen>=1;
+}
+function undoMove(){
+  if(!canUndo())return;
+  const g=PG.game;
+  if(g.turn()===PG.kidColor){ g.undo(); g.undo(); } else { g.undo(); }
+  PG.undosLeft--; PG.moves=g.history().length; PG.sel=null;
+  const vh=g.history({verbose:true});
+  PG.lastMove=vh.length?{from:vh[vh.length-1].from,to:vh[vh.length-1].to}:null;
+  drawPlayGame();
+  toast(`↩️ Move taken back — ${PG.undosLeft} undo${PG.undosLeft===1?"":"s"} left`);
+}
 function resignGame(){ if(!PG.over && confirm("Resign this game? The computer will win — tap Cancel to keep playing!")){ PG.over=true; finishComputerGame("loss","Good game! Every loss teaches something. 💪"); } }
 async function endComputerGame(){
   const g=PG.game; let result,msg;
@@ -1860,7 +1877,7 @@ window.back=back; window.go=go;
 // expose handlers used by inline onclick
 Object.assign(window,{gateCreate,gateJoin,doCreateFamily,doJoinFamily,tapProfile,tapParent,checkParentPin,
   addProfile,pickColor,doAddProfile,startLesson,answerQuiz,bonusChallenge,retrySimilarPuzzle,ackCoaching,
-  switchProfile,drawPlaySetup,startComputerGame,offerDraw,resignGame,createLiveGame,cancelLive,joinLiveUI,
+  switchProfile,drawPlaySetup,startComputerGame,offerDraw,resignGame,undoMove,createLiveGame,cancelLive,joinLiveUI,
   doJoinLive,resignLive,leaveLive,startPassPlay,parentTab,parentPlayMode,resetFamily,replayDemo,toggleVoice});
 boot();
 </script>
