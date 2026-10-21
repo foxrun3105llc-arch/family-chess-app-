@@ -1523,7 +1523,7 @@ function drawPlayGame(){
   <div id="gmsg"></div>${capturedTraysHTML(g)}
   <div class="movelist" id="ml"></div>
   <div class="center">
-    <button class="btn sky" onclick="undoMove()" ${canUndo()?"":"disabled style=\"opacity:.45\""}>↩️ Undo (${PG.undosLeft} left)</button>
+    <button class="btn sky" id="undobtn" onclick="undoMove()" ${canUndo()?"":"disabled style=\"opacity:.45\""}>↩️ Undo (${PG.undosLeft} left)</button>
     <button class="btn ghost" onclick="offerDraw()">🤝 Draw?</button>
     <button class="btn rose" onclick="resignGame()">🏳️ Resign</button>
     <button class="btn mint" onclick="render('play')">↻ New game</button>
@@ -1533,6 +1533,8 @@ function drawPlayGame(){
 }
 function drawPlayBoard(){
   const g=PG.game, el=$("#gb"); if(!el)return;
+  const ub=$("#undobtn");
+  if(ub){ const ok=canUndo(); ub.disabled=!ok; ub.style.opacity=ok?"":"0.45"; ub.textContent=`↩️ Undo (${PG.undosLeft} left)`; }
   const hl={};
   if(PG.lastMove){ hl[PG.lastMove.from]="last"; hl[PG.lastMove.to]="last"; }
   if(g.in_check()){ const k=kingInCheckSq(g); if(k) hl[k]="check"; }
