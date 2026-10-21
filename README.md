@@ -11,6 +11,11 @@ across devices with no login required on the kids' iPads.
 
 ## Revisions
 
+### Rev 7 — 2026-10-20
+- Bug fix: the Undo button in vs-computer games stayed greyed out for the whole
+  game because its enabled state was only set when the screen first drew. It
+  now refreshes after every move.
+
 ### Rev 6 — 2026-10-19
 - Vs-computer games now have an Undo button: take back the last full round
   (your move + the computer's reply), up to 3 times per game. Captures,
