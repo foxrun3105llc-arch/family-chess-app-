@@ -11,6 +11,14 @@ across devices with no login required on the kids' iPads.
 
 ## Revisions
 
+### Rev 8 — 2026-10-31
+- Live family games can now be rejoined after a disconnect, dead battery, or
+  closed app. The Play family screen lists "Your games in progress" (opponent,
+  move count, whose turn, last played) with a Continue button, entering a
+  game's code again also resumes it if you're one of the players, and a stuck
+  game can be removed from the list (gone for both players, nobody wins).
+  Game state was already stored server-side; this adds the way back in.
+
 ### Rev 7 — 2026-10-20
 - Bug fix: the Undo button in vs-computer games stayed greyed out for the whole
   game because its enabled state was only set when the screen first drew. It
