@@ -57,6 +57,8 @@ body{
 h1{font-size:32px;margin:12px 0;} h2{font-size:24px;margin:10px 0;} h3{font-size:19px;margin:8px 0;}
 p{font-size:17px;line-height:1.55;color:var(--ink);}
 .muted{color:var(--ink-soft);} .center{text-align:center;}
+.game-row{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:10px 2px;border-top:1px dashed rgba(90,70,140,.25);text-align:left;}
+.game-row .btn{flex:none;}
 .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;margin:14px 0;}
 .card.peach{background:var(--peach);} .card.mint{background:var(--mint);}
 .card.lavender{background:var(--lavender);} .card.sky{background:var(--sky);}
@@ -1630,7 +1632,9 @@ function renderLiveLobby(){
   <p class="muted">Live games work across iPads — one player creates, the other joins with the code.</p></div>
   <button class="btn primary big" onclick="createLiveGame()">✨ Create a live game</button>
   <button class="btn sky big" onclick="joinLiveUI()">🔑 Join with code</button>
-  <button class="btn mint big" onclick="startPassPlay()">📱 Pass-and-play (one iPad)</button>`;
+  <button class="btn mint big" onclick="startPassPlay()">📱 Pass-and-play (one iPad)</button>
+  <div id="mygames"></div>`;
+  loadMyGames();
 }
 async function createLiveGame(){
   const code=rnd(4);
@@ -1652,6 +1656,50 @@ async function createLiveGame(){
   LG={code,watching:true};
 }
 async function cancelLive(code){ try{await ref(`liveGames/${code}`).remove();}catch(e){} back(); }
+function relTime(ts){
+  const s=Math.max(0,(Date.now()-ts)/1000);
+  if(s<90)return "just now";
+  if(s<3600)return Math.round(s/60)+" min ago";
+  if(s<86400)return Math.round(s/3600)+" hr ago";
+  const dd=Math.round(s/86400); return dd+(dd===1?" day ago":" days ago");
+}
+async function loadMyGames(){
+  const box=$("#mygames"); if(!box)return;
+  let all=null,profs=null;
+  try{ all=await dbGet("liveGames"); profs=await dbGet("profiles"); }catch(e){}
+  if(!all){box.innerHTML="";return;}
+  const mine=Object.entries(all).filter(([c,g])=>g&&(g.white===PROFILE.id||g.black===PROFILE.id)&&(g.status==="waiting"||g.status==="active"))
+    .sort((a,b)=>(b[1].updatedAt||0)-(a[1].updatedAt||0));
+  if(!mine.length){box.innerHTML="";return;}
+  const nameOf=id=>(profs&&profs[id]&&profs[id].name)||"Opponent";
+  box.innerHTML=`<div class="card sky"><h3>🎮 Your games in progress</h3>`+mine.map(([code,g])=>{
+    const myColor=g.white===PROFILE.id?"w":"b";
+    const oppId=myColor==="w"?g.black:g.white;
+    const n=(g.moves||[]).length;
+    let state;
+    if(g.status==="waiting")state="Waiting for your opponent — share the code!";
+    else state=(g.turn===myColor)?"<b>Your move!</b>":"Waiting for "+esc(nameOf(oppId))+" to move";
+    const when=g.updatedAt?(" · last played "+relTime(g.updatedAt)):"";
+    return `<div class="game-row"><div><b>${code}</b> · vs ${esc(oppId?nameOf(oppId):"…")}<br><span class="muted">${n} moves · ${state}${when}</span></div>
+    <button class="btn primary" onclick="resumeLive('${code}')">▶ Continue</button>
+    <button class="btn ghost" onclick="dropLive('${code}')" aria-label="Remove game">🗑</button></div>`;
+  }).join("")+`</div>`;
+}
+async function resumeLive(code){
+  const d=await dbGet(`liveGames/${code}`);
+  if(!d){toast("That game is gone.");renderLiveLobby();return;}
+  const myColor=d.white===PROFILE.id?"w":d.black===PROFILE.id?"b":null;
+  if(!myColor){toast("That game belongs to other players.");return;}
+  if(d.status==="finished"){toast("That game already ended.");renderLiveLobby();return;}
+  await logActivity("livegame",`resumed ${code}`);
+  enterLiveGame(code,myColor);
+}
+async function dropLive(code){
+  if(!confirm("Remove this game? It will be gone for both players, and nobody wins."))return;
+  try{await ref(`liveGames/${code}`).remove();}catch(e){}
+  await logActivity("livegame",`removed unfinished game ${code}`);
+  renderLiveLobby();
+}
 function joinLiveUI(){
   view.innerHTML=topbar("Join game")+`
   <div class="card sky center"><h2>Enter the game code</h2>
@@ -1663,8 +1711,10 @@ async function doJoinLive(){
   const code=(($("#gcode").value||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,""));
   const d=await dbGet(`liveGames/${code}`);
   if(!d){toast("No game with that code. Check it and try again!");return;}
-  if(d.status!=="waiting"){toast("That game already started or ended.");return;}
-  if(d.white===PROFILE.id){toast("That's your own game — join from the other iPad!");return;}
+  if(d.status==="finished"){toast("That game already ended.");return;}
+  const mineColor=d.white===PROFILE.id?"w":d.black===PROFILE.id?"b":null;
+  if(mineColor){ await logActivity("livegame",`resumed ${code} by code`); enterLiveGame(code,mineColor); return; }
+  if(d.status!=="waiting"){toast("That game already has two players.");return;}
   await dbUpdate(`liveGames/${code}`,{black:PROFILE.id,status:"active",updatedAt:Date.now()});
   await logActivity("livegame",`joined ${code}`);
   enterLiveGame(code,"b");
@@ -1880,7 +1930,7 @@ window.back=back; window.go=go;
 Object.assign(window,{gateCreate,gateJoin,doCreateFamily,doJoinFamily,tapProfile,tapParent,checkParentPin,
   addProfile,pickColor,doAddProfile,startLesson,answerQuiz,bonusChallenge,retrySimilarPuzzle,ackCoaching,
   switchProfile,drawPlaySetup,startComputerGame,offerDraw,resignGame,undoMove,createLiveGame,cancelLive,joinLiveUI,
-  doJoinLive,resignLive,leaveLive,startPassPlay,parentTab,parentPlayMode,resetFamily,replayDemo,toggleVoice});
+  doJoinLive,resignLive,leaveLive,resumeLive,dropLive,startPassPlay,parentTab,parentPlayMode,resetFamily,replayDemo,toggleVoice});
 boot();
 </script>
 </body>
