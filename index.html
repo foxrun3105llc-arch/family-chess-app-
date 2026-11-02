@@ -1624,9 +1624,17 @@ async function finishComputerGame(result,msg){
     <div class="big-emoji">${result==="win"?"🏆":result==="draw"?"🤝":"💪"}</div>
     <h1>${result==="win"?"You win!":result==="draw"?"Draw!":"Good game!"}</h1>
     <p style="font-size:19px">${msg}</p><p class="muted">+${xp} XP · vs ${AI_NAMES[PG.aiLevel]}</p>
+    <div class="board-wrap"><div class="board" id="finalb"></div></div>
+    ${PG.game.in_checkmate()?`<p class="muted">👀 Look at the board: the king is in check and has NO escape — that's checkmate!</p>`:""}
     <button class="btn primary big" onclick="render('play')">↻ Play again</button>
     <button class="btn ghost big" onclick="NAV=['home'];render('home')">Home</button>
   </div>`;
+  const fb=$("#finalb");
+  if(fb){ const gg=PG.game, hl={};
+    if(PG.lastMove){ hl[PG.lastMove.from]="last"; hl[PG.lastMove.to]="last"; }
+    if(gg.in_check()){ const ksq=kingInCheckSq(gg); if(ksq) hl[ksq]="check"; }
+    drawBoard(fb, gg, {orientation:PG.kidColor, highlights:hl, interactive:false});
+  }
   if(result==="win")confetti(100);
 }
 
@@ -1815,8 +1823,16 @@ function onLiveFinished(d){
   view.innerHTML=topbar("Game over",false)+`
   <div class="card ${win?"butter":"sky"} center"><div class="big-emoji">${win?"🏆":"🤝"}</div>
   <h1>${title}</h1><p style="font-size:19px">${msg}</p>
+  <div class="board-wrap"><div class="board" id="finalb"></div></div>
+  ${LG.game&&LG.game.in_checkmate()?`<p class="muted">👀 Look at the board: the king is in check and has NO escape — that's checkmate!</p>`:""}
   <button class="btn primary big" onclick="render('live')">↻ New family game</button>
   <button class="btn ghost big" onclick="NAV=['home'];render('home')">Home</button></div>`;
+  const fb2=$("#finalb");
+  if(fb2&&LG.game){ const gg=LG.game, hl={};
+    if(d.lastMove){ hl[d.lastMove.from]="last"; hl[d.lastMove.to]="last"; }
+    if(gg.in_check()){ const ksq=kingInCheckSq(gg); if(ksq) hl[ksq]="check"; }
+    drawBoard(fb2, gg, {orientation:d.white===PROFILE.id?"w":"b", highlights:hl, interactive:false});
+  }
   try{ setTimeout(()=>{ref(`liveGames/${LG.code}`).remove().catch(()=>{});},30000); }catch(e){}
 }
 
