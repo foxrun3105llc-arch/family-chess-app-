@@ -11,6 +11,13 @@ across devices with no login required on the kids' iPads.
 
 ## Revisions
 
+### Rev 11 — 2026-11-01
+- Game-over screens (vs computer and live family games) now keep the final
+  board on screen under the result banner, with the last move and the
+  checkmated king highlighted — so kids can study the mating position instead
+  of it vanishing the moment the game ends. Checkmate finishes add a line
+  explaining the king has no escape.
+
 ### Rev 10 — 2026-11-01
 - **Tic-Tac-Toe** added as its own home-screen section (chess untouched):
   vs the computer at three levels (Easy = random, Medium = blocks and takes
