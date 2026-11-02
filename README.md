@@ -11,6 +11,16 @@ across devices with no login required on the kids' iPads.
 
 ## Revisions
 
+### Rev 10 — 2026-11-01
+- **Tic-Tac-Toe** added as its own home-screen section (chess untouched):
+  vs the computer at three levels (Easy = random, Medium = blocks and takes
+  wins, Hard = perfect minimax play that can never lose — verified
+  exhaustively), live family games with create/join-by-code plus the same
+  in-progress games list and resume support as chess, rematch with swapped
+  symbols, and pass-and-play. Live games live under `tttGames/` in the same
+  family tree (existing rules cover it); results are logged as activities,
+  not into the chess games history.
+
 ### Rev 9 — 2026-11-01
 - New "next level" learning phase (the 15 lessons are untouched): **Famous
   games explained** — three complete real games (Morphy's Opera Game 1858,
