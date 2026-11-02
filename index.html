@@ -59,6 +59,9 @@ p{font-size:17px;line-height:1.55;color:var(--ink);}
 .muted{color:var(--ink-soft);} .center{text-align:center;}
 .game-row{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:10px 2px;border-top:1px dashed rgba(90,70,140,.25);text-align:left;}
 .game-row .btn{flex:none;}
+.ttt-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:330px;margin:14px auto;}
+.ttt-cell{aspect-ratio:1;border:none;border-radius:18px;background:#FFF7E8;font-family:inherit;font-size:50px;font-weight:800;cursor:pointer;box-shadow:0 3px 0 rgba(90,70,140,.18);display:flex;align-items:center;justify-content:center;padding:0;}
+.ttt-cell.win{background:#CDEAC0;}
 .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;margin:14px 0;}
 .card.peach{background:var(--peach);} .card.mint{background:var(--mint);}
 .card.lavender{background:var(--lavender);} .card.sky{background:var(--sky);}
@@ -501,7 +504,7 @@ function render(screen, arg){
   window.scrollTo(0,0);
   ({gate:renderGate, profiles:renderProfiles, home:renderHome, lesson:renderLesson,
     quiz:renderQuiz, puzzles:renderPuzzles, play:renderPlay, live:renderLiveLobby,
-    demos:renderDemos, demo:renderDemoSafe,
+    demos:renderDemos, demo:renderDemoSafe, ttt:renderTTTHub, tttgame:renderTTTSafe,
     livegame:renderLiveGameSafe, playgame:renderPlayGameSafe, passplay:renderPassPlaySafe,
     parent:renderParent}[screen]||renderGate)(arg);
 }
@@ -1022,6 +1025,7 @@ async function renderHome(){
   </div>
   <button class="btn lavender big" onclick="go('live')">👧🧒 Play family</button>
   <button class="btn butter big" onclick="go('demos')">🎬 Next level: Famous games explained</button>
+  <button class="btn rose big" onclick="go('ttt')">⭕ Tic-Tac-Toe ❌</button>
   <h2>📚 Lessons <span class="muted" style="font-size:15px">${doneCount}/${LESSONS.length} done</span></h2>
   ${rows}
   <div class="center" style="margin-top:14px">
@@ -2062,6 +2066,278 @@ async function demoAutoLoop(run){
   }
 }
 
+
+/* ============================ 3N3. TIC-TAC-TOE ========================= */
+
+const TTT_LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+let TT=null;
+function tttWinner(b){
+  for(const L of TTT_LINES){ if(b[L[0]]&&b[L[0]]===b[L[1]]&&b[L[1]]===b[L[2]]) return {who:b[L[0]],line:L}; }
+  if(b.every(c=>c)) return {who:"draw",line:null};
+  return null;
+}
+function normTTTBoard(b){ return Array.from({length:9},(_,i)=>(b&&b[i])||""); }
+function tttFindWin(b,who){
+  for(let i=0;i<9;i++){ if(!b[i]){ b[i]=who; const w=tttWinner(b); b[i]=""; if(w&&w.who===who) return i; } }
+  return -1;
+}
+function tttBestMove(b,me,opp){
+  function mm(board,turn,depth){
+    const w=tttWinner(board);
+    if(w){ if(w.who===me)return 10-depth; if(w.who===opp)return depth-10; return 0; }
+    const isMax=turn===me; let best=isMax?-Infinity:Infinity;
+    for(let i=0;i<9;i++){ if(!board[i]){ board[i]=turn; const v=mm(board,turn===me?opp:me,depth+1); board[i]=""; best=isMax?Math.max(best,v):Math.min(best,v); } }
+    return best;
+  }
+  let bestIdx=-1,bestVal=-Infinity;
+  for(let i=0;i<9;i++){ if(!b[i]){ b[i]=me; const v=mm(b,opp,0); b[i]=""; if(v>bestVal){bestVal=v;bestIdx=i;} } }
+  return bestIdx;
+}
+function tttCpuMove(b,level){
+  const empties=[...Array(9).keys()].filter(i=>!b[i]);
+  if(!empties.length)return -1;
+  if(level>=3) return tttBestMove(b,"O","X");
+  if(level===2){
+    let i=tttFindWin(b,"O"); if(i>=0)return i;
+    i=tttFindWin(b,"X"); if(i>=0)return i;
+    if(!b[4])return 4;
+    const corners=[0,2,6,8].filter(x=>!b[x]);
+    if(corners.length&&Math.random()<0.8) return corners[Math.floor(Math.random()*corners.length)];
+  }
+  return empties[Math.floor(Math.random()*empties.length)];
+}
+function renderTTTHub(){
+  view.innerHTML=topbar("Tic-Tac-Toe")+`
+  <div class="card rose center"><div class="big-emoji">⭕❌</div><h2>Tic-Tac-Toe</h2>
+  <p class="muted">Get three in a row — across, down, or diagonally!</p></div>
+  <div class="card sky center"><h3>🤖 Play the computer</h3>
+  <p class="muted">You play ❌ and go first. Pick how tricky the computer is:</p>
+  <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <button class="btn mint big" onclick="startTTTCpu(1)">😊 Easy</button>
+    <button class="btn butter big" onclick="startTTTCpu(2)">🙂 Medium</button>
+    <button class="btn rose big" onclick="startTTTCpu(3)">🧠 Hard</button>
+  </div></div>
+  <div class="card lavender center"><h3>👧🧒 Play family</h3>
+  <button class="btn primary big" onclick="createTTTGame()">✨ Create a live game</button>
+  <button class="btn sky big" onclick="joinTTTUI()">🔑 Join with code</button>
+  <button class="btn mint big" onclick="startTTTPass()">📱 Pass-and-play (one iPad)</button></div>
+  <div id="myttt"></div>`;
+  loadMyTTTGames();
+}
+async function loadMyTTTGames(){
+  const box=$("#myttt"); if(!box)return;
+  let all=null,profs=null;
+  try{ all=await dbGet("tttGames"); profs=await dbGet("profiles"); }catch(e){}
+  if(!all){box.innerHTML="";return;}
+  const mine=Object.entries(all).filter(([c,g])=>g&&(g.x===PROFILE.id||g.o===PROFILE.id)&&(g.status==="waiting"||g.status==="active"))
+    .sort((a,b)=>(b[1].updatedAt||0)-(a[1].updatedAt||0));
+  if(!mine.length){box.innerHTML="";return;}
+  const nameOf=id=>(profs&&profs[id]&&profs[id].name)||"Opponent";
+  box.innerHTML=`<div class="card sky"><h3>🎮 Your games in progress</h3>`+mine.map(([code,g])=>{
+    const mySym=g.x===PROFILE.id?"X":"O";
+    const oppId=mySym==="X"?g.o:g.x;
+    const n=normTTTBoard(g.board).filter(c=>c).length;
+    let state;
+    if(g.status==="waiting")state="Waiting for your opponent — share the code!";
+    else state=(g.turn===mySym)?"<b>Your move!</b>":"Waiting for "+esc(nameOf(oppId))+" to move";
+    const when=g.updatedAt?(" · last played "+relTime(g.updatedAt)):"";
+    return `<div class="game-row"><div><b>${code}</b> · vs ${esc(oppId?nameOf(oppId):"…")}<br><span class="muted">${n} moves · ${state}${when}</span></div>
+    <button class="btn primary" onclick="resumeTTT('${code}')">▶ Continue</button>
+    <button class="btn ghost" onclick="dropTTT('${code}')" aria-label="Remove game">🗑</button></div>`;
+  }).join("")+`</div>`;
+}
+async function resumeTTT(code){
+  const d=await dbGet(`tttGames/${code}`);
+  if(!d){toast("That game is gone.");renderTTTHub();return;}
+  if(d.x!==PROFILE.id&&d.o!==PROFILE.id){toast("That game belongs to other players.");return;}
+  if(d.status==="finished"){toast("That game already ended.");renderTTTHub();return;}
+  await logActivity("ttt",`resumed ${code}`);
+  enterTTTGame(code);
+}
+async function dropTTT(code){
+  if(!confirm("Remove this game? It will be gone for both players, and nobody wins."))return;
+  try{await ref(`tttGames/${code}`).remove();}catch(e){}
+  await logActivity("ttt",`removed unfinished game ${code}`);
+  renderTTTHub();
+}
+function startTTTCpu(level){
+  TT={mode:"cpu",level,board:Array(9).fill(""),turn:"X",over:false,winInfo:null,thinking:false,score:{you:0,cpu:0,draws:0}};
+  NAV.push("tttgame"); drawTTT();
+}
+function startTTTPass(){
+  TT={mode:"pass",board:Array(9).fill(""),turn:"X",over:false,winInfo:null};
+  NAV.push("tttgame"); drawTTT();
+}
+function renderTTTSafe(){ if(TT) drawTTT(); else render("ttt"); }
+function tttCellsHTML(board,winLine){
+  return `<div class="ttt-grid">${board.map((c,i)=>`<button class="ttt-cell${winLine&&winLine.indexOf(i)>=0?" win":""}" onclick="tttTap(${i})">${c==="X"?"❌":c==="O"?"⭕":""}</button>`).join("")}</div>`;
+}
+function drawTTT(){
+  if(!TT)return;
+  let title="Tic-Tac-Toe", status="", board, winLine=null, buttons="";
+  if(TT.mode==="cpu"){
+    board=TT.board; winLine=TT.winInfo?TT.winInfo.line:null;
+    const sc=TT.score;
+    if(TT.over){
+      status=TT.winInfo.who==="X"?`<b>${praise()} You win! 🎉</b>`:TT.winInfo.who==="draw"?"<b>It's a draw! 🤝</b>":"<b>The computer wins this one — try again! 💪</b>";
+    } else status=TT.thinking?"Computer is thinking…":"<b>Your move — you are ❌</b>";
+    buttons=`${TT.over?`<button class="btn primary big" onclick="tttAgain()">▶ Play again</button>`:""}
+    <button class="btn ghost big" onclick="back()">Done</button>
+    <p class="muted center">You ${sc.you} · Computer ${sc.cpu} · Draws ${sc.draws} · Level: ${["","😊 Easy","🙂 Medium","🧠 Hard"][TT.level]}</p>`;
+    view.innerHTML=topbar(title)+`<div class="card center"><p style="font-size:19px">${status}</p>${tttCellsHTML(board,winLine)}${buttons}</div>`;
+  } else if(TT.mode==="pass"){
+    board=TT.board; winLine=TT.winInfo?TT.winInfo.line:null;
+    if(TT.over){
+      status=TT.winInfo.who==="draw"?"<b>It's a draw! 🤝</b>":`<b>${TT.winInfo.who==="X"?"❌":"⭕"} wins! 🎉</b>`;
+    } else status=`<b>${TT.turn==="X"?"❌":"⭕"} to move</b> — pass the iPad! 📱`;
+    buttons=`${TT.over?`<button class="btn primary big" onclick="tttAgain()">▶ Play again</button>`:""}
+    <button class="btn ghost big" onclick="back()">Done</button>`;
+    view.innerHTML=topbar(title)+`<div class="card center"><p style="font-size:19px">${status}</p>${tttCellsHTML(board,winLine)}${buttons}</div>`;
+  } else if(TT.mode==="live"){
+    const d=TT.data;
+    if(!d){ view.innerHTML=topbar(title)+`<div class="card center"><p>Loading game…</p></div>`; return; }
+    board=normTTTBoard(d.board);
+    const w=tttWinner(board); winLine=w?w.line:null;
+    const mySym=d.x===PROFILE.id?"X":"O";
+    title=`vs ${esc(TT.oppName||"Opponent")}`;
+    if(d.status==="waiting") status="Waiting for your opponent to join…";
+    else if(d.winner) status=d.winner==="draw"?"<b>It's a draw! 🤝</b>":(d.winner===mySym?"<b>🎉 You win!</b>":`<b>${esc(TT.oppName||"Opponent")} wins this one!</b>`);
+    else status=myTTTTurn()?`<b>Your move — you are ${mySym==="X"?"❌":"⭕"}</b>`:`${esc(TT.oppName||"Opponent")} is thinking…`;
+    buttons=d.winner
+      ?`<button class="btn primary big" onclick="tttRematch()">▶ Play again</button><button class="btn ghost big" onclick="leaveTTT()">Done</button>`
+      :`<button class="btn ghost big" onclick="leaveTTT()">Leave (finish later)</button>`;
+    view.innerHTML=topbar(title)+`<div class="card center"><p style="font-size:19px">${status}</p>${tttCellsHTML(board,winLine)}${buttons}</div>`;
+  }
+}
+function tttEndCpu(){
+  const w=tttWinner(TT.board);
+  if(!w)return false;
+  TT.over=true; TT.winInfo=w;
+  if(w.who==="X"){ TT.score.you++; addXP(5); confetti(70); logActivity("ttt",`beat the computer (level ${TT.level})`); }
+  else if(w.who==="O"){ TT.score.cpu++; logActivity("ttt",`lost to the computer (level ${TT.level})`); }
+  else { TT.score.draws++; logActivity("ttt",`drew the computer (level ${TT.level})`); }
+  return true;
+}
+function tttAgain(){
+  if(!TT)return;
+  if(TT.mode==="cpu"){ TT.board=Array(9).fill(""); TT.turn="X"; TT.over=false; TT.winInfo=null; TT.thinking=false; }
+  else if(TT.mode==="pass"){ TT.board=Array(9).fill(""); TT.turn="X"; TT.over=false; TT.winInfo=null; }
+  drawTTT();
+}
+async function tttTap(i){
+  if(!TT)return;
+  if(TT.mode==="cpu"){
+    if(TT.over||TT.thinking||TT.turn!=="X"||TT.board[i])return;
+    TT.board[i]="X"; TT.turn="O";
+    if(tttEndCpu()){ drawTTT(); return; }
+    drawTTT();
+    TT.thinking=true;
+    setTimeout(()=>{
+      if(!TT||TT.mode!=="cpu"||TT.over)return;
+      const mv=tttCpuMove(TT.board,TT.level);
+      if(mv>=0)TT.board[mv]="O";
+      TT.turn="X"; TT.thinking=false;
+      tttEndCpu();
+      drawTTT();
+    },500);
+  } else if(TT.mode==="pass"){
+    if(TT.over||TT.board[i])return;
+    TT.board[i]=TT.turn;
+    const w=tttWinner(TT.board);
+    if(w){ TT.over=true; TT.winInfo=w; if(w.who!=="draw")confetti(60); logActivity("ttt",`pass-and-play: ${w.who==="draw"?"draw":w.who+" won"}`); }
+    else TT.turn=TT.turn==="X"?"O":"X";
+    drawTTT();
+  } else if(TT.mode==="live"){
+    if(!myTTTTurn())return;
+    const d=TT.data; const board=normTTTBoard(d.board);
+    if(board[i])return;
+    const mySym=d.x===PROFILE.id?"X":"O";
+    board[i]=mySym;
+    const w=tttWinner(board);
+    const upd={board,turn:mySym==="X"?"O":"X",updatedAt:Date.now()};
+    if(w){ upd.winner=w.who; upd.status="finished"; }
+    await dbUpdate(`tttGames/${TT.code}`,upd);
+  }
+}
+function myTTTTurn(){
+  if(!TT||TT.mode!=="live"||!TT.data||TT.data.status!=="active")return false;
+  const d=TT.data;
+  return (d.x===PROFILE.id&&d.turn==="X")||(d.o===PROFILE.id&&d.turn==="O");
+}
+async function createTTTGame(){
+  const code=rnd(4);
+  await dbSet(`tttGames/${code}`,{status:"waiting",x:PROFILE.id,o:null,board:["","","","","","","","",""],turn:"X",winner:null,updatedAt:Date.now()});
+  await logActivity("ttt",`created ${code}`);
+  view.innerHTML=topbar("Waiting…")+`
+  <div class="card butter center"><h2>Share this code!</h2>
+  <div class="lobby-code">${code}</div>
+  <p>On the other iPad: <b>Tic-Tac-Toe → Join with code</b><br>You play <b>❌</b> and go first</p>
+  <p class="muted">Waiting for your opponent…</p>
+  <button class="btn rose" onclick="cancelTTT('${code}')">Cancel</button></div>`;
+  const cb=ref(`tttGames/${code}`).on("value",snap=>{
+    const d=snap.val(); if(!d)return;
+    if(d.status==="active"&&d.o){ enterTTTGame(code); }
+  });
+  LIVE_UNSUBS.push(()=>ref(`tttGames/${code}`).off("value",cb));
+  TT={mode:"live",code,watching:true};
+}
+async function cancelTTT(code){ try{await ref(`tttGames/${code}`).remove();}catch(e){} back(); }
+function joinTTTUI(){
+  view.innerHTML=topbar("Join game")+`
+  <div class="card sky center"><h2>Enter the game code</h2>
+  <input type="text" id="tgcode" maxlength="4" placeholder="ABCD" autocomplete="off"
+    style="text-transform:uppercase;letter-spacing:6px;text-align:center;font-size:32px;font-family:ui-monospace,monospace;">
+  <button class="btn primary big" onclick="doJoinTTT()">Join! ⭕</button></div>`;
+}
+async function doJoinTTT(){
+  const code=(($("#tgcode").value||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,""));
+  const d=await dbGet(`tttGames/${code}`);
+  if(!d){toast("No game with that code. Check it and try again!");return;}
+  if(d.status==="finished"){toast("That game already ended.");return;}
+  if(d.x===PROFILE.id||d.o===PROFILE.id){ await logActivity("ttt",`resumed ${code} by code`); enterTTTGame(code); return; }
+  if(d.status!=="waiting"){toast("That game already has two players.");return;}
+  await dbUpdate(`tttGames/${code}`,{o:PROFILE.id,status:"active",updatedAt:Date.now()});
+  await logActivity("ttt",`joined ${code}`);
+  enterTTTGame(code);
+}
+async function enterTTTGame(code){
+  LIVE_UNSUBS.forEach(u=>{try{u();}catch(e){}}); LIVE_UNSUBS=[];
+  TT={mode:"live",code,data:null,done:false,oppName:"Opponent"};
+  NAV.push("tttgame");
+  const cb=ref(`tttGames/${code}`).on("value",async snap=>{
+    const d=snap.val(); if(!d){ if(!TT.done){toast("Game closed.");back();} return; }
+    TT.data=d;
+    const mySym=d.x===PROFILE.id?"X":"O";
+    const oppPid=mySym==="X"?d.o:d.x;
+    if(oppPid&&TT.oppName==="Opponent"){
+      const n=await dbGet(`profiles/${oppPid}/name`); if(n)TT.oppName=n;
+    }
+    if(d.winner&&!TT.done){ TT.done=true; onTTTLiveEnd(d,mySym); }
+    if(!d.winner) TT.done=false;
+    drawTTT();
+  });
+  LIVE_UNSUBS.push(()=>ref(`tttGames/${code}`).off("value",cb));
+  drawTTT();
+}
+function onTTTLiveEnd(d,mySym){
+  if(d.winner==="draw"){ logActivity("ttt",`family game ${TT.code}: draw`); }
+  else if(d.winner===mySym){ addXP(10); confetti(80); logActivity("ttt",`family game ${TT.code}: won`); }
+  else { logActivity("ttt",`family game ${TT.code}: lost`); }
+}
+async function tttRematch(){
+  if(!TT||TT.mode!=="live"||!TT.data)return;
+  const d=TT.data;
+  TT.done=false;
+  await dbUpdate(`tttGames/${TT.code}`,{board:["","","","","","","","",""],turn:"X",winner:null,status:"active",x:d.o,o:d.x,updatedAt:Date.now()});
+  await logActivity("ttt",`rematch ${TT.code}`);
+}
+async function leaveTTT(){
+  if(TT&&TT.mode==="live"&&TT.data&&TT.data.winner){
+    try{await ref(`tttGames/${TT.code}`).remove();}catch(e){}
+  }
+  back();
+}
+
 /* ============================ 3O. PARENT DASHBOARD ======================== */
 async function renderParent(){
   if(!PROFILE||PROFILE.role!=="parent"){ NAV=["profiles"]; render("profiles"); return; }
@@ -2142,7 +2418,9 @@ window.back=back; window.go=go;
 Object.assign(window,{gateCreate,gateJoin,doCreateFamily,doJoinFamily,tapProfile,tapParent,checkParentPin,
   addProfile,pickColor,doAddProfile,startLesson,answerQuiz,bonusChallenge,retrySimilarPuzzle,ackCoaching,
   switchProfile,drawPlaySetup,startComputerGame,offerDraw,resignGame,undoMove,createLiveGame,cancelLive,joinLiveUI,
-  doJoinLive,resignLive,leaveLive,resumeLive,dropLive,startDemo,demoStep,demoJump,demoTogglePlay,startPassPlay,parentTab,parentPlayMode,resetFamily,replayDemo,toggleVoice});
+  doJoinLive,resignLive,leaveLive,resumeLive,dropLive,startDemo,demoStep,demoJump,demoTogglePlay,
+  startTTTCpu,startTTTPass,tttTap,tttAgain,createTTTGame,cancelTTT,joinTTTUI,doJoinTTT,resumeTTT,dropTTT,tttRematch,leaveTTT,
+  startPassPlay,parentTab,parentPlayMode,resetFamily,replayDemo,toggleVoice});
 boot();
 </script>
 </body>
