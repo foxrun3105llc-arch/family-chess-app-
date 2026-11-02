@@ -11,6 +11,15 @@ across devices with no login required on the kids' iPads.
 
 ## Revisions
 
+### Rev 9 — 2026-11-01
+- New "next level" learning phase (the 15 lessons are untouched): **Famous
+  games explained** — three complete real games (Morphy's Opera Game 1858,
+  Scholar's Mate, Légal's Mate 1750) replayed move by move with a plain-words
+  explanation of every move by both sides, ⭐ key-move moments, optional voice
+  narration (same toggle as lessons), step/autoplay controls, and a "What to
+  remember" strategy card at the end. Watching a game to the end earns +10 XP
+  (once per game) and is remembered on the list.
+
 ### Rev 8 — 2026-10-31
 - Live family games can now be rejoined after a disconnect, dead battery, or
   closed app. The Play family screen lists "Your games in progress" (opponent,
