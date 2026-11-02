@@ -71,7 +71,7 @@ p{font-size:17px;line-height:1.55;color:var(--ink);}
 }
 .btn:active{transform:scale(.96);}
 .btn.primary{background:#FFC98B;} .btn.mint{background:var(--mint);}
-.btn.sky{background:var(--sky);} .btn.lavender{background:var(--lavender);}
+.btn.sky{background:var(--sky);} .btn.lavender{background:var(--lavender);} .btn.butter{background:var(--butter);}
 .btn.rose{background:var(--rose);} .btn.ghost{background:#F1EDE6;}
 .btn.big{font-size:22px;padding:20px 34px;width:100%;margin:10px 0;}
 .btn:disabled{opacity:.45;cursor:default;}
@@ -501,6 +501,7 @@ function render(screen, arg){
   window.scrollTo(0,0);
   ({gate:renderGate, profiles:renderProfiles, home:renderHome, lesson:renderLesson,
     quiz:renderQuiz, puzzles:renderPuzzles, play:renderPlay, live:renderLiveLobby,
+    demos:renderDemos, demo:renderDemoSafe,
     livegame:renderLiveGameSafe, playgame:renderPlayGameSafe, passplay:renderPassPlaySafe,
     parent:renderParent}[screen]||renderGate)(arg);
 }
@@ -1020,6 +1021,7 @@ async function renderHome(){
     <button class="btn sky big" onclick="go('play')">🤖 Play computer</button>
   </div>
   <button class="btn lavender big" onclick="go('live')">👧🧒 Play family</button>
+  <button class="btn butter big" onclick="go('demos')">🎬 Next level: Famous games explained</button>
   <h2>📚 Lessons <span class="muted" style="font-size:15px">${doneCount}/${LESSONS.length} done</span></h2>
   ${rows}
   <div class="center" style="margin-top:14px">
@@ -1850,6 +1852,216 @@ function drawPassPlay(){
 }
 /* ---- pass-and-play uses drawPassPlay directly via the render table ---- */
 
+
+/* ============================ 3N2. DEMO GAMES (WATCH & LEARN) ========== */
+const DEMO_GAMES=[
+ {id:"opera",emoji:"🎭",title:"The Opera Game",who:"Paul Morphy (White) vs a Duke & a Count, Paris 1858",
+  theme:"Develop fast & attack as a team",
+  intro:"Paris, 1858. Paul Morphy — maybe the greatest player who ever lived — played this game at the opera, against a Duke and a Count playing together as Black. Morphy checkmates them in just 17 moves. Watch HOW: he gets every piece into the game and attacks as a team, while Black's pieces are still asleep at home.",
+  moves:["e4","e5","Nf3","d6","d4","Bg4","dxe5","Bxf3","Qxf3","dxe5","Bc4","Nf6","Qb3","Qe7","Nc3","c6","Bg5","b5","Nxb5","cxb5","Bxb5+","Nbd7","O-O-O","Rd8","Rxd7","Rxd7","Rd1","Qe6","Bxd7+","Nxd7","Qb8+","Nxb8","Rd8#"],
+  notes:[
+   "Morphy grabs the center with his king pawn. Controlling the middle squares is where almost every great game begins.",
+   "Black does the same — a pawn in the center too. A fair fight for the middle!",
+   "White's knight jumps out and attacks Black's center pawn. Knights love to come out early!",
+   "Black defends the pawn with a smaller pawn. Safe… but a bit slow — that pawn now blocks Black's own bishop in.",
+   "White smashes the center open right away! When your pieces are developing faster, opening the middle helps YOUR army, not theirs.",
+   "Black's bishop pops out and PINS the knight to the queen — the knight cannot move without losing the queen behind it. A pin!",
+   "White captures in the center. Watch what that does to the pin…",
+   "Black's bishop takes the knight, breaking a piece off White's army. But look what it really did — it cleared the path for White's QUEEN to recapture and join the attack!",
+   "The queen recaptures — and now she stares at the pawn on f7, the weakest square near Black's king. Only the king guards f7!",
+   "Black takes back in the center. But count the developed pieces: White has three pieces out. Black has… none. Most of Black's army is still sleeping at home.",
+   "The bishop lands on its dream diagonal — ALSO aiming at f7. Now two attackers are pointed at the weakest square!",
+   "Black finally develops a knight, and it defends f7. A good idea — but White is already miles ahead in development.",
+   "The queen slides sideways but STILL watches f7 — and now peeks at b7 too. White's pieces all work together like a team passing a ball.",
+   "Black's queen comes out to defend. But notice — she steps in front of Black's bishop, so that bishop is now stuck at home!",
+   "Another knight joins the team! White has almost every piece in the game. Black still has pieces asleep.",
+   "Black pushes a pawn to make some room. A quiet move… while a storm is gathering.",
+   "White's last bishop joins in — and it's another PIN! This knight cannot move, because the queen sits right behind it.",
+   "Black attacks White's bishop with a pawn, hoping to chase it away. This is exactly the moment Morphy was waiting for…",
+   "⭐ SACRIFICE! The knight captures the pawn, giving itself up on purpose — to rip open the road to Black's king. Morphy doesn't count pieces. He counts ATTACKERS near the king.",
+   "Black captures — and the trap door swings open. Two files are now highways straight into Black's position.",
+   "Check! The bishop takes the other pawn, and Black's king is suddenly out in the open with almost no defenders nearby.",
+   "Black blocks the check with a knight — the only move. The king has no safe square to run to.",
+   "⭐ Morphy castles — and it's an ATTACKING move! Now his king is safe AND his rook lands on the wide-open d-file, aimed right at the knight blocking the check.",
+   "Black's rook rushes over to protect that knight. Black is hanging on by a thread.",
+   "⭐ ANOTHER sacrifice! The rook captures the knight. Morphy keeps throwing pieces at the king's defenders — because the second rook is coming next.",
+   "Black recaptures with the rook — there is nothing better. But now that rook is stuck: it can't move away, or the queen behind it is lost.",
+   "The second rook arrives! Two rooks stacked on the open file, squeezing Black's pinned rook. Total control of the d-file.",
+   "Black's queen tries to help — and offers to trade queens. Morphy says: no trades. I'm here to checkmate you!",
+   "The bishop captures the rook with check! White keeps giving away pieces — because every capture drags one of Black's defenders away from the king.",
+   "Black's knight captures the bishop. That knight is now the ONLY piece standing between White's queen and checkmate…",
+   "⭐ The queen flies in with check — one last sacrifice! The knight is forced to capture her…",
+   "…and capturing drags the LAST defender away from the back rank. Look down the d-file now — completely empty!",
+   "🏁 CHECKMATE! The rook slides down the open file, and Black's king is trapped by his own pieces. Morphy used EVERY piece on the board. That is the real secret of this game: develop fast, open lines, and attack as a team!"],
+  remember:[
+   "Develop your pieces fast — Morphy won because all his pieces were playing while Black's were still at home.",
+   "f7 — the pawn next to the king — is the weakest square in the opening. Aim at theirs, and protect yours!",
+   "A sacrifice is not losing a piece. It's trading a piece for a checkmate plan.",
+   "Castling can attack! It put Morphy's rook on the open file, ready to crash in."]},
+ {id:"scholars",emoji:"🎯",title:"Scholar's Mate",who:"The most famous 4-move trick in chess",
+  theme:"The weak f7 square — and how to stop the trick",
+  intro:"This is the most famous trick in all of chess — checkmate in only FOUR moves! White attacks the weakest square on the board: f7, the pawn right next to the king. Learn this trick so you can use it… and so nobody can ever use it on YOU. At the end, I'll show you exactly how Black could have stopped it.",
+  moves:["e4","e5","Bc4","Nc6","Qh5","Nf6","Qxf7#"],
+  notes:[
+   "White takes the center with the king pawn — the classic first move.",
+   "Black takes the center too. So far, a normal game.",
+   "The bishop races out and aims straight at f7 — the pawn next to Black's king. Remember this square: ONLY the king protects it. It is the weakest point in Black's whole camp.",
+   "Black develops a knight. A good, normal move… but Black hasn't noticed the danger building on f7.",
+   "⭐ The queen rushes out and joins the attack on f7! Now TWO pieces aim at the weakest square. Bringing the queen out this early is usually a bad idea — unless she is about to win the game on the spot!",
+   "Black develops a knight and attacks the queen. It LOOKS smart… but it doesn't protect f7! This is the big mistake. Black had two good defenses: chase the queen away with g6, or protect f7. Always ask: what is my opponent threatening?",
+   "🏁 CHECKMATE! The queen captures on f7. She is protected by the bishop, so the king cannot capture her — and he has no escape square. Game over in 4 moves. This is Scholar's Mate!"],
+  remember:[
+   "f7 is the weakest square near the king — only the king protects it.",
+   "How to STOP Scholar's Mate: when the queen comes to h5, chase her with g6, or protect f7 first (with your queen or by blocking the bishop).",
+   "An early queen attack only works if it wins immediately. Most of the time, the queen gets chased and YOU fall behind.",
+   "After every opponent move, ask: what are they threatening? Black never asked — and got checkmated."]},
+ {id:"legal",emoji:"👑",title:"The Queen Trap (Légal's Mate)",who:"Légal de Kermur (White), Paris 1750",
+  theme:"Don't get greedy — a free queen can be poisoned!",
+  intro:"Paris, 1750 — one of the oldest famous traps in chess, from more than 250 years ago! White offers Black his QUEEN — the most valuable piece — completely free. Should Black take it? Watch what happens when greed takes over…",
+  moves:["e4","e5","Nf3","Nc6","Bc4","d6","Nc3","Bg4","h3","Bh5","Nxe5","Bxd1","Bxf7+","Ke7","Nd5#"],
+  notes:[
+   "White grabs the center.",
+   "Black grabs the center right back.",
+   "The knight comes out and attacks Black's center pawn.",
+   "Black defends the pawn with a knight. Good, solid development.",
+   "The bishop settles on its favorite diagonal — eyeing f7 again. That square shows up in more traps than any other!",
+   "Black supports the center with a pawn. Solid… but that pawn keeps Black's other bishop locked at home.",
+   "White brings out the last knight. All of White's small pieces are marching into the game.",
+   "Black pins the knight to the queen — the same pin from Morphy's game. Black is quietly proud of this pin…",
+   "White pokes the bishop with a pawn: 'Take my knight, or go home!' It looks like a tiny, quiet question…",
+   "The bishop backs up but STAYS on the pin line. Black loves this pin. That pride is about to cost Black the whole game!",
+   "⭐ SHOCK MOVE! The 'pinned' knight captures the center pawn — completely ignoring the pin! White is daring Black: go on, take my queen. Can a pinned piece move? YES — if the prize for moving it is big enough!",
+   "Black grabs the queen — the most valuable piece on the board! It feels like winning… but it's the losing move. Taking the queen dragged Black's bishop far, far away from protecting the king.",
+   "Check! The bishop strikes f7 — the weakest square again — and the king must run. White is down a whole queen, but look: the king is in the open and White's knights are swarming.",
+   "The king steps forward — the only move he has. He stands in the middle of the board with no defenders anywhere near him.",
+   "🏁 CHECKMATE! The knight lands the final blow. The king is completely surrounded — mated by two knights and a bishop. White's queen is gone, but the TEAM delivered checkmate. Teamwork beats one greedy grab!"],
+  remember:[
+   "A pin is not magic. If moving the pinned piece wins the game, you are allowed to move it!",
+   "When someone offers you a big piece for free, ask WHY before you grab it.",
+   "Checkmate is a team job — two knights and a bishop beat a king with no defenders.",
+   "Greedy captures can pull your defenders away from your king. Protect the king first!"]}
+];
+
+let DG=null;
+function renderDemos(){
+  view.innerHTML=topbar("Famous games")+`
+  <div class="card butter center"><div class="big-emoji">🎬</div><h2>Watch the masters!</h2>
+  <p class="muted">Real famous games, explained move by move — what BOTH players were thinking, and the strategy that won the game. Finished your lessons? This is the next level!</p></div>
+  <div id="demolist"></div>`;
+  loadDemoList();
+}
+async function loadDemoList(){
+  const box=$("#demolist"); if(!box)return;
+  let watched=null;
+  try{ watched=await dbGet(`progress/${PROFILE.id}/demos`); }catch(e){}
+  box.innerHTML=DEMO_GAMES.map((g,i)=>{
+    const done=watched&&watched[g.id]&&watched[g.id].completed;
+    const mv=Math.ceil(g.moves.length/2);
+    return `<div class="lesson-row${done?" done":""}" onclick="startDemo(${i})">
+      <div class="lesson-num">${done?"✓":g.emoji}</div>
+      <div class="lesson-info"><div class="t">${esc(g.title)}${done?' <span class="badge gold">Watched ✓</span>':""}</div>
+      <div class="s">${esc(g.theme)} · ${mv} moves · tap to watch</div></div>
+    </div>`;
+  }).join("");
+}
+function startDemo(i){
+  const g=DEMO_GAMES[i];
+  DG={game:g, idx:i, ply:0, playing:false, run:0, finished:false};
+  NAV.push("demo"); render("demo");
+  LIVE_UNSUBS.push(()=>{ if(DG){ DG.playing=false; DG.run++; } stopSpeak(); });
+  speak(g.intro);
+}
+function renderDemoSafe(){ if(DG) drawDemo(); else render("demos"); }
+function drawDemo(){
+  if(!DG)return;
+  const gv=DG.game, total=gv.moves.length, ply=DG.ply;
+  const g=new Chess(); let last=null;
+  for(let k=0;k<ply;k++) last=g.move(gv.moves[k]);
+  const hl={};
+  if(last){ hl[last.from]="last"; hl[last.to]="last"; }
+  if(g.in_check()){ const ksq=kingInCheckSq(g); if(ksq)hl[ksq]="check"; }
+  const PIECES={p:"pawn",n:"knight",b:"bishop",r:"rook",q:"queen",k:"king"};
+  let heading, note;
+  if(ply===0){ heading="The starting position"; note=gv.intro; }
+  else{
+    const mvN=Math.floor((ply-1)/2)+1, side=(ply-1)%2===0?"White":"Black";
+    heading=`Move ${mvN} · ${side} plays ${gv.moves[ply-1]}`;
+    note=gv.notes[ply-1];
+  }
+  const atEnd=ply>=total;
+  view.innerHTML=topbar(gv.emoji+" "+gv.title)+`
+  <div class="card"><p class="center muted" style="margin-top:0">${esc(gv.who)}</p>
+  <div class="board-wrap"><div class="board" id="demob"></div></div>
+  <div class="progressbar"><div style="width:${Math.round(ply/total*100)}%"></div></div>
+  <p class="center muted" style="margin:4px 0">Step ${ply} of ${total} · <b>${esc(gv.theme)}</b></p>
+  <div id="demotxt"><h3 style="margin:6px 0">${esc(heading)}</h3><p style="font-size:18px;margin:6px 0">${esc(note)}</p></div>
+  <div class="center" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <button class="btn ghost" onclick="demoJump(0)">⏮ Start</button>
+    <button class="btn sky" onclick="demoStep(-1)" ${ply===0?'disabled style="opacity:.45"':""}>◀ Back</button>
+    <button class="btn primary" onclick="demoTogglePlay()">${DG.playing?"⏸ Pause":"▶ Play all"}</button>
+    <button class="btn sky" onclick="demoStep(1)" ${atEnd?'disabled style="opacity:.45"':""}>Next ▶</button>
+  </div></div>
+  ${atEnd?demoEndHTML():""}`;
+  drawBoard($("#demob"), g, {highlights:hl, interactive:false});
+  if(atEnd) onDemoEnd();
+}
+function demoEndHTML(){
+  const gv=DG.game;
+  return `<div class="card mint"><h3>🧠 What to remember</h3>
+  ${gv.remember.map(r=>`<p style="font-size:17px;margin:8px 0">• ${esc(r)}</p>`).join("")}
+  <div class="center"><button class="btn sky" onclick="demoJump(0)">↻ Watch again</button>
+  <button class="btn primary" onclick="back()">All games</button></div></div>`;
+}
+async function onDemoEnd(){
+  if(!DG||DG.finished)return; DG.finished=true;
+  confetti(60);
+  const gv=DG.game;
+  let prev=null;
+  try{ prev=await dbGet(`progress/${PROFILE.id}/demos/${gv.id}`); }catch(e){}
+  if(!prev||!prev.completed){
+    try{ await dbSet(`progress/${PROFILE.id}/demos/${gv.id}`,{completed:true,at:Date.now()}); }catch(e){}
+    await addXP(10);
+    toast("Game finished! +10 XP 🎬");
+  }
+  await logActivity("demo",`watched ${gv.title}`);
+}
+function demoStep(d){
+  if(!DG)return;
+  DG.playing=false; DG.run++;
+  const total=DG.game.moves.length;
+  DG.ply=Math.max(0,Math.min(total,DG.ply+d));
+  drawDemo();
+  speak(DG.ply===0?DG.game.intro:DG.game.notes[DG.ply-1]);
+}
+function demoJump(p){
+  if(!DG)return;
+  DG.playing=false; DG.run++;
+  DG.ply=p;
+  drawDemo();
+  speak(p===0?DG.game.intro:DG.game.notes[p-1]);
+}
+function demoTogglePlay(){
+  if(!DG)return;
+  if(DG.playing){ DG.playing=false; DG.run++; stopSpeak(); drawDemo(); return; }
+  if(DG.ply>=DG.game.moves.length) DG.ply=0;
+  DG.playing=true; DG.run++;
+  drawDemo();
+  demoAutoLoop(DG.run);
+}
+async function demoAutoLoop(run){
+  while(DG&&DG.playing&&DG.run===run){
+    const total=DG.game.moves.length;
+    if(DG.ply>=total){ DG.playing=false; drawDemo(); return; }
+    DG.ply++;
+    drawDemo();
+    const t0=Date.now();
+    await speakWait(DG.game.notes[DG.ply-1]);
+    if(!DG||!DG.playing||DG.run!==run) return;
+    const el=Date.now()-t0;
+    if(el<2600) await wait(2600-el);
+  }
+}
+
 /* ============================ 3O. PARENT DASHBOARD ======================== */
 async function renderParent(){
   if(!PROFILE||PROFILE.role!=="parent"){ NAV=["profiles"]; render("profiles"); return; }
@@ -1930,7 +2142,7 @@ window.back=back; window.go=go;
 Object.assign(window,{gateCreate,gateJoin,doCreateFamily,doJoinFamily,tapProfile,tapParent,checkParentPin,
   addProfile,pickColor,doAddProfile,startLesson,answerQuiz,bonusChallenge,retrySimilarPuzzle,ackCoaching,
   switchProfile,drawPlaySetup,startComputerGame,offerDraw,resignGame,undoMove,createLiveGame,cancelLive,joinLiveUI,
-  doJoinLive,resignLive,leaveLive,resumeLive,dropLive,startPassPlay,parentTab,parentPlayMode,resetFamily,replayDemo,toggleVoice});
+  doJoinLive,resignLive,leaveLive,resumeLive,dropLive,startDemo,demoStep,demoJump,demoTogglePlay,startPassPlay,parentTab,parentPlayMode,resetFamily,replayDemo,toggleVoice});
 boot();
 </script>
 </body>
