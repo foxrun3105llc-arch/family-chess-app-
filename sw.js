@@ -2,7 +2,7 @@
    Navigations: network-first so updates arrive when online; the cached
    page is served when offline so the app can still open with no signal.
    Versioned Firebase SDK scripts (immutable URLs): cache-first. */
-const CACHE = "cla-cache-v12";
+const CACHE = "cla-cache-v13";
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(["./index.html"])).then(() => self.skipWaiting()));
 });
