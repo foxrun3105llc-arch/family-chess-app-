@@ -11,6 +11,19 @@ across devices with no login required on the kids' iPads.
 
 ## Revisions
 
+### Rev 14 — 2026-11-07 — Nearby play (hotspot + QR handshake)
+- New mode in Play family: two iPads on the same Wi-Fi or phone hotspot play live with NO internet.
+  Connection invitation is exchanged by QR code (host shows an offer code, guest scans and shows an
+  answer code, host scans back); moves then flow over a WebRTC data channel. No servers, no accounts.
+- Signaling payloads are compacted SDP (ICE ufrag/pwd, DTLS fingerprint, host candidates only) —
+  about 340 chars, a 65x65-module QR. QR toolkit bundled inline (jsQR, Apache-2.0; qrcode-generator,
+  MIT) so scanning/generation also work offline.
+- Finished nearby games are recorded like live family games (winner +15 XP, game record) through the
+  rev 12 outbox, so results earned offline sync when internet returns. Unfinished games end if the
+  connection drops — nothing is stored server-side. Pass-and-play still covers the no-network-at-all case.
+- Service worker cache bumped to v14.
+
+
 ### Rev 13 — 2026-11-07 — Merida pieces, 3D tournament boards, jumbo home
 - Piece artwork swapped everywhere from Cburnett outlines to the shaded Merida set
   (design: Armando H. Marroquin, via Lichess's open piece library), bundled inline so it works offline.
