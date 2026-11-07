@@ -157,6 +157,8 @@ table.stats th{color:var(--ink-soft);}
 .diff-btn{border:3px solid transparent;background:var(--white);border-radius:14px;padding:12px 14px;font-weight:700;
   cursor:pointer;min-height:56px;box-shadow:var(--shadow);font-size:15px;}
 .diff-btn.sel{border-color:#B79CED;background:var(--lavender);}
+.netpill{position:fixed;right:14px;bottom:14px;background:#8A5A44;color:#fff;padding:10px 16px;
+  border-radius:999px;font-weight:700;font-size:14px;box-shadow:var(--shadow);z-index:60;max-width:88vw;}
 .lobby-code{font-size:52px;font-weight:800;letter-spacing:8px;text-align:center;background:var(--butter);
   border-radius:18px;padding:16px;margin:12px 0;}
 .tabs{display:flex;gap:8px;margin:10px 0;flex-wrap:wrap;}
@@ -331,6 +333,7 @@ table.stats th{color:var(--ink-soft);}
 <!-- ============================ 2. HTML SHELL ============================== -->
 <div id="view"></div>
 <div id="toast" class="toast"></div>
+<div id="netpill" class="netpill" style="display:none"></div>
 <div id="confetti"></div>
 <noscript><div class="card center"><h2>Chess Learning App</h2><p>Please turn on JavaScript to play and learn chess.</p></div></noscript>
 
@@ -409,13 +412,112 @@ function starsHTML(n){ let s=""; for(let i=0;i<3;i++) s+= i<n?"★":"☆"; retur
 
 /* ---- tiny db helpers (all paths under /families/{FAM}) ---- */
 function ref(path){ return DB.ref("families/"+FAM+"/"+path); }
-function dbGet(path){ return ref(path).once("value").then(s=>s.val()); }
-function dbSet(path, val){ return ref(path).set(val); }
+
+/* ===================== REV 12: OFFLINE MODE =====================
+   The app keeps a local mirror of every profile's progress (LPROG) plus a
+   durable outbox of pending writes. Offline (car, plane, no Wi-Fi) the app
+   still boots from the on-device cache, progress updates the mirror
+   instantly, and every write waits in the outbox; when the connection
+   returns, the outbox flushes to Firebase and the mirror re-syncs from the
+   server. Live cross-iPad games still need the internet — everything else
+   (lessons, puzzles, vs-computer, demos, pass-and-play) works offline. */
+let OFFLINE=false;
+let LPROG={};
+let PINHASH=null;
+const LS_CACHE="cla_cache_v1";
+const LS_OUTBOX="cla_outbox_v1";
+let OUTBOX=[]; try{ OUTBOX=JSON.parse(localStorage.getItem(LS_OUTBOX)||"[]"); if(!Array.isArray(OUTBOX)) OUTBOX=[]; }catch(e){ OUTBOX=[]; }
+let FLUSHING=false;
+
+function saveOutbox(){ try{ localStorage.setItem(LS_OUTBOX, JSON.stringify(OUTBOX)); }catch(e){} }
+function saveCache(){ try{ if(FAM) localStorage.setItem(LS_CACHE, JSON.stringify({fam:FAM, profiles:PROFILES, pinHash:PINHASH, progress:LPROG, savedAt:Date.now()})); }catch(e){} }
+function loadCache(){ try{ const c=JSON.parse(localStorage.getItem(LS_CACHE)||"null"); return (c&&c.fam&&c.fam===FAM)?c:null; }catch(e){ return null; } }
+function updateNetPill(){
+  const el=document.getElementById("netpill"); if(!el) return;
+  if(OFFLINE){ el.style.display="block";
+    el.textContent = OUTBOX.length? `📴 Offline — ${OUTBOX.length} thing${OUTBOX.length===1?"":"s"} saved on this iPad` : "📴 Offline — saving on this iPad";
+  } else el.style.display="none";
+}
+function queueSet(path, val){
+  OUTBOX=OUTBOX.filter(op=>op.path!==path);
+  OUTBOX.push({path, val});
+  saveOutbox(); updateNetPill(); flushOutbox();
+}
+async function flushOutbox(){
+  if(FLUSHING||!DB||!FAM||OFFLINE||!OUTBOX.length) return;
+  FLUSHING=true; let n=0;
+  while(OUTBOX.length){
+    const op=OUTBOX[0];
+    try{ await DB.ref("families/"+FAM+"/"+op.path).set(op.val); }
+    catch(e){ break; }
+    OUTBOX.shift(); n++; saveOutbox();
+  }
+  FLUSHING=false; updateNetPill();
+  if(n&&!OUTBOX.length) toast("☁️ Synced! Everything saved is now backed up.");
+}
+function watchConnection(){
+  try{
+    DB.ref(".info/connected").on("value", async snap=>{
+      if(snap.val()===true){
+        const was=OFFLINE; OFFLINE=false; updateNetPill();
+        await flushOutbox();
+        if(was&&PROFILE&&!OUTBOX.length){
+          try{ const v=await ref("progress").once("value").then(s=>s.val()); if(v){ LPROG=v; saveCache(); } }catch(e){}
+          try{ const pv=await ref("profiles").once("value").then(s=>s.val()); if(pv){ PROFILES=pv; saveCache(); } }catch(e){}
+        }
+      } else { OFFLINE=true; updateNetPill(); }
+    });
+  }catch(e){}
+  try{ window.addEventListener("online", ()=>flushOutbox()); }catch(e){}
+}
+function progWalk(path){
+  const parts=path.split("/").slice(1); let o=LPROG;
+  for(const p of parts){ if(o==null||typeof o!=="object") return undefined; o=o[p]; }
+  return o;
+}
+function progPut(path, val){
+  const parts=path.split("/").slice(1); let o=LPROG;
+  for(let i=0;i<parts.length-1;i++){ if(o[parts[i]]==null||typeof o[parts[i]]!=="object") o[parts[i]]={}; o=o[parts[i]]; }
+  o[parts[parts.length-1]]=val;
+}
+function clone(v){ return v==null?v:JSON.parse(JSON.stringify(v)); }
+
+function dbGet(path){
+  if(path.indexOf("progress/")===0){
+    const v=progWalk(path);
+    if(v!==undefined) return Promise.resolve(clone(v));
+    if(OFFLINE) return Promise.resolve(null);
+    return ref(path).once("value").then(s=>s.val());
+  }
+  if(path==="meta"&&OFFLINE) return Promise.resolve(PINHASH?{parentPinHash:PINHASH}:null);
+  return ref(path).once("value").then(s=>s.val());
+}
+function dbSet(path, val){
+  if(path.indexOf("progress/")===0){ progPut(path, clone(val)); saveCache(); queueSet(path, clone(val)); return Promise.resolve(); }
+  return ref(path).set(val);
+}
 function dbUpdate(path, val){ return ref(path).update(val); }
-function dbPush(path, val){ return ref(path).push(val); }
+function dbPush(path, val){
+  if(path==="games"||path.indexOf("activities/")===0){
+    const r=ref(path).push();
+    queueSet(path+"/"+r.key, val);
+    return r;
+  }
+  return ref(path).push(val);
+}
+async function logActivityFor(pid, type, detail){
+  if(!pid) return;
+  try{ await dbPush(`activities/${pid}`, {type, detail:detail||"", createdAt:Date.now()}); }catch(e){}
+}
 async function logActivity(type, detail){
   if(!PROFILE) return;
-  try{ await dbPush(`activities/${PROFILE.id}`, {type, detail:detail||"", createdAt:Date.now()}); }catch(e){}
+  return logActivityFor(PROFILE.id, type, detail);
+}
+async function loadAllProgress(){
+  if(!OFFLINE){
+    try{ const v=await ref("progress").once("value").then(s=>s.val()); if(v){ LPROG=v; saveCache(); return; } }catch(e){}
+  }
+  const c=loadCache(); if(c&&c.progress) LPROG=c.progress;
 }
 
 /* ============================ 3C. NAVIGATION ============================= */
@@ -510,24 +612,36 @@ function render(screen, arg){
 }
 function renderLiveGameSafe(){ if(LG&&LG.data) drawLiveBoard(); else render("live"); }
 function renderPlayGameSafe(){ if(PG&&PG.game) drawPlayGame(); else render("play"); }
-function renderPassPlaySafe(){ if(PP&&PP.game) drawPassPlay(); else render("live"); }
+function renderPassPlaySafe(){ if(PP&&PP.game) drawPassPlay(); else if(PPSET) drawPPSetup(); else render("live"); }
 
 /* ============================ 3D. BOOT =================================== */
 async function boot(){
   if(!CONFIG_OK){ renderSetupNeeded(); return; }
   if(typeof firebase==="undefined"){ renderNetError("Could not load the pieces of the app. Check your internet and reload."); return; }
+  if(typeof Chess==="undefined"){ renderNetError("The chess rules did not load. Check your internet and reload."); return; }
+  try{ if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{}); }catch(e){}
+  let online=false;
   try{
     firebase.initializeApp(FIREBASE_CONFIG);
     DB = firebase.database();
-    await firebase.auth().signInAnonymously();
-  }catch(e){ renderNetError("Could not connect. Check your internet and reload."); return; }
-  if(typeof Chess==="undefined"){ renderNetError("The chess rules did not load. Check your internet and reload."); return; }
+    watchConnection();
+    await Promise.race([firebase.auth().signInAnonymously(), wait(7000).then(()=>{ throw new Error("auth timeout"); })]);
+    online=true;
+  }catch(e){ online=false; }
   const savedFam = localStorage.getItem(LS_FAM);
   if(savedFam){
-    const fam = await DB.ref("families/"+savedFam+"/meta").once("value").then(s=>s.val()).catch(()=>null);
-    if(fam){ FAM = savedFam; await loadProfiles(); return enterWithSavedProfile(); }
-    localStorage.removeItem(LS_FAM);
+    FAM = savedFam;
+    if(online){
+      const fam = await DB.ref("families/"+savedFam+"/meta").once("value").then(s=>s.val()).catch(()=>null);
+      if(fam){ PINHASH=fam.parentPinHash||null; await loadProfiles(); saveCache(); flushOutbox(); return enterWithSavedProfile(); }
+      localStorage.removeItem(LS_FAM); FAM=null;
+    } else {
+      const c = loadCache();
+      if(c){ OFFLINE=true; PROFILES=c.profiles||{}; LPROG=c.progress||{}; PINHASH=c.pinHash||null; updateNetPill(); return enterWithSavedProfile(); }
+      renderNetError("No internet right now, and this iPad hasn't saved your family yet. Connect to the internet once and open the app — after that, offline play will work on this iPad!"); return;
+    }
   }
+  if(!online){ renderNetError("Could not connect. Check your internet and reload."); return; }
   NAV=["gate"]; render("gate");
 }
 function renderSetupNeeded(){
@@ -545,8 +659,10 @@ function renderNetError(msg){
     <button class="btn primary big" onclick="location.reload()">Try again</button></div>`;
 }
 async function loadProfiles(){
+  if(OFFLINE){ const c=loadCache(); if(c&&c.profiles&&Object.keys(c.profiles).length){ PROFILES=c.profiles; return; } }
   const v = await dbGet("profiles");
   PROFILES = v||{};
+  saveCache();
 }
 async function enterWithSavedProfile(){
   const pid = localStorage.getItem(LS_PROFILE);
@@ -660,6 +776,7 @@ async function tapProfile(pid){
 async function loginProfile(pid, remember){
   PROFILE = Object.assign({id:pid}, PROFILES[pid]);
   if(remember) localStorage.setItem(LS_PROFILE, pid);
+  await loadAllProgress();
   await loadCoaching();
   touchStreak(true);
   NAV=["home"]; render("home");
@@ -686,6 +803,7 @@ async function checkParentPin(pid){
   if(meta && meta.parentPinHash === hashPin(pin)){
     localStorage.setItem(LS_PINOK, "1");
     PROFILE = Object.assign({id:pid}, PROFILES[pid]);
+    await loadAllProgress();
     NAV=["parent"]; render("parent");
   } else toast("Hmm, that PIN didn't match. Try again!");
 }
@@ -1226,10 +1344,11 @@ async function finishQuiz(){
   </div>`;
   confetti(stars*40);
 }
-async function addXP(n){
-  const sk=(await dbGet(`progress/${PROFILE.id}/skill`))||{level:1,xp:0};
+async function addXP(n, pid){
+  pid = pid||PROFILE.id;
+  const sk=(await dbGet(`progress/${pid}/skill`))||{level:1,xp:0};
   sk.xp=(sk.xp||0)+n; sk.level=Math.min(10,1+Math.floor(sk.xp/100));
-  await dbSet(`progress/${PROFILE.id}/skill`,sk);
+  await dbSet(`progress/${pid}/skill`,sk);
 }
 async function maybeBadge(lessonId, stars){
   const map={knight:"Knight Jumper 🐴",check:"Checkmate Champ 🏆",tactics:"Tactic Wizard 🧙",endgame:"Endgame Expert 🎯",pawn:"Pawn Promoter 👑",tactics2:"Trick Tactician 🎯",mates:"Mating Master 👑",strategy:"Grand Strategist 🧠"};
@@ -1644,11 +1763,12 @@ function renderLiveLobby(){
   view.innerHTML=topbar("Play family")+`
   <div class="card lavender center"><div class="big-emoji">👧🧒</div><h2>Play someone in your family!</h2>
   <p class="muted">Live games work across iPads — one player creates, the other joins with the code.</p></div>
-  <button class="btn primary big" onclick="createLiveGame()">✨ Create a live game</button>
-  <button class="btn sky big" onclick="joinLiveUI()">🔑 Join with code</button>
+  ${OFFLINE?`<div class="card rose center"><p style="margin:0">📴 <b>You're offline.</b> Live games need the internet — but pass-and-play works right here on one iPad, and the result saves on the iPad and syncs later!</p></div>`
+  :`<button class="btn primary big" onclick="createLiveGame()">✨ Create a live game</button>
+  <button class="btn sky big" onclick="joinLiveUI()">🔑 Join with code</button>`}
   <button class="btn mint big" onclick="startPassPlay()">📱 Pass-and-play (one iPad)</button>
   <div id="mygames"></div>`;
-  loadMyGames();
+  if(!OFFLINE) loadMyGames();
 }
 async function createLiveGame(){
   const code=rnd(4);
@@ -1838,17 +1958,50 @@ function onLiveFinished(d){
 
 /* ---- pass-and-play ---- */
 let PP=null;
+let PPSET=null;
+function ppName(pid, fallback){ return pid&&PROFILES[pid]?PROFILES[pid].name:fallback; }
 function startPassPlay(){
-  PP={game:new Chess(),sel:null,lastMove:null,over:false}; NAV.push("passplay"); drawPassPlay();
+  const others=Object.keys(PROFILES).filter(id=>id!==PROFILE.id);
+  const sib=others.find(id=>PROFILES[id].role==="kid")||others[0]||"guest";
+  PPSET={w:PROFILE.id, b:sib};
+  NAV.push("passplay"); drawPPSetup();
 }
-function renderPassPlayAlias(){ drawPassPlay(); }
+function drawPPSetup(){
+  const chip=(side,id,label)=>`<button class="diff-btn ${PPSET[side]===id?"sel":""}" onclick="ppPick('${side}','${id}')">${label}</button>`;
+  const row=side=>Object.entries(PROFILES).map(([id,p])=>chip(side,id,`${avatarHTML(p,26)} ${esc(p.name)}`)).join("")+chip(side,"guest","👤 Guest");
+  const both=PPSET.w!=="guest"&&PPSET.b!=="guest"&&PPSET.w!==PPSET.b;
+  view.innerHTML=topbar("Pass-and-play")+`
+  <div class="card mint center"><div class="big-emoji">📱</div><h2>Who's playing?</h2>
+  <p class="muted">Two players, one iPad — pass it back and forth after every move.${OFFLINE?" You're offline: the result saves on this iPad and syncs later!":""}</p></div>
+  <div class="card"><h3>♔ White</h3><div class="diff-pick">${row("w")}</div>
+  <h3>♚ Black</h3><div class="diff-pick">${row("b")}</div>
+  <p class="center muted">${both?`✅ This game will be saved for <b>${esc(ppName(PPSET.w,""))}</b> and <b>${esc(ppName(PPSET.b,""))}</b>.`:"Pick two different players (not Guest) and the result will be saved for both!"}</p>
+  <button class="btn primary big" onclick="ppBegin()">▶ Start game</button></div>`;
+}
+function ppPick(side,id){ PPSET[side]=id; drawPPSetup(); }
+function ppBegin(){
+  PP={game:new Chess(),sel:null,lastMove:null,over:false,moves:0,logged:false,winner:null,
+      whitePid:PPSET.w==="guest"?null:PPSET.w, blackPid:PPSET.b==="guest"?null:PPSET.b};
+  drawPassPlay();
+}
+function renderPassPlayAlias(){ if(PP) drawPassPlay(); else drawPPSetup(); }
 function drawPassPlay(){
   const g=PP.game;
+  const wn=ppName(PP.whitePid,"White"), bn=ppName(PP.blackPid,"Black");
+  let banner="";
+  if(PP.over){
+    if(PP.winner==="draw") banner=`<div class="feedback good" style="text-align:center;font-size:20px">Draw! Well played, ${esc(wn)} and ${esc(bn)}! 🤝</div>`;
+    else banner=`<div class="feedback good" style="text-align:center;font-size:20px">Checkmate! ${esc(PP.winner==="w"?wn:bn)} wins! 🏆</div>`;
+    if(g.in_checkmate()) banner+=`<p class="muted center">👀 Look at the board: the king is in check and has NO escape — that's checkmate!</p>`;
+    if(PP.whitePid&&PP.blackPid) banner+=`<p class="muted center">💾 Result saved${OFFLINE?" on this iPad — it will sync when you're back online":""}!</p>`;
+  }
   view.innerHTML=topbar("Pass-and-play")+`
-  <div class="card mint"><p class="center"><b>${g.turn()==="w"?"White":"Black"}</b> to move — pass the iPad! 📱</p>
+  <div class="card mint"><p class="center"><b>${esc(wn)}</b> ♔ vs <b>${esc(bn)}</b> ♚</p>
+  ${PP.over?banner:`<p class="center"><b>${g.turn()==="w"?esc(wn):esc(bn)}</b> to move — pass the iPad! 📱</p>`}
   <div class="board-wrap"><div class="board" id="ppb"></div></div>
-  <div id="ppmsg"></div>
-  <div class="center"><button class="btn ghost" onclick="back()">End game</button></div></div>`;
+  <div class="center">${PP.over
+    ?`<button class="btn primary" onclick="startPassPlay()">↻ Play again</button> <button class="btn ghost" onclick="NAV=['home'];render('home')">Home</button>`
+    :`<button class="btn ghost" onclick="back()">End game</button>`}</div></div>`;
   const el=$("#ppb"); const hl={};
   if(PP.lastMove){hl[PP.lastMove.from]="last";hl[PP.lastMove.to]="last";}
   if(g.in_check()){const k=kingInCheckSq(g);if(k)hl[k]="check";}
@@ -1862,15 +2015,29 @@ function drawPassPlay(){
     if(!mv){const pc=g.get(sq);PP.sel=(pc&&pc.color===g.turn())?sq:null;drawPassPlay();return;}
     let promo=null; if(mv.promotion)promo=await promoPicker();
     const res=g.move({from:mv.from,to:mv.to,promotion:promo||"q"});
-    PP.sel=null;PP.lastMove={from:res.from,to:res.to};
-    if(g.game_over()){PP.over=true;
-      const msg=g.in_checkmate()?`Checkmate! ${(g.turn()==="w"?"Black":"White")} wins! 🏆`:"Draw! Well played both! 🤝";
-      $("#ppmsg").innerHTML=`<div class="feedback good" style="text-align:center;font-size:20px">${msg}</div>`;confetti(80);
-    }
+    PP.sel=null;PP.lastMove={from:res.from,to:res.to};PP.moves++;
+    if(g.game_over()){ finishPassPlay(); return; }
     drawPassPlay();
   }});
 }
-/* ---- pass-and-play uses drawPassPlay directly via the render table ---- */
+async function finishPassPlay(){
+  if(PP.logged) return; PP.logged=true; PP.over=true;
+  const g=PP.game;
+  PP.winner=g.in_checkmate()?(g.turn()==="w"?"b":"w"):"draw";
+  if(PP.winner!=="draw") confetti(80);
+  if(PP.whitePid&&PP.blackPid&&PP.whitePid!==PP.blackPid){
+    const w=PP.winner;
+    await dbPush("games",{type:"vs-kid",profileIds:[PP.whitePid,PP.blackPid],
+      result:w==="draw"?"draw":(w==="w"?"white-wins":"black-wins"),
+      winnerPid:w==="draw"?null:(w==="w"?PP.whitePid:PP.blackPid),
+      moveCount:PP.moves,createdAt:Date.now(),via:"pass-and-play"});
+    if(w==="draw"){ addXP(5,PP.whitePid); addXP(5,PP.blackPid); }
+    else addXP(15, w==="w"?PP.whitePid:PP.blackPid);
+    logActivityFor(PP.whitePid,"game",`pass-and-play vs ${ppName(PP.blackPid,"Black")}: ${w==="draw"?"draw":(w==="w"?"won":"lost")} (${PP.moves} moves)`);
+    logActivityFor(PP.blackPid,"game",`pass-and-play vs ${ppName(PP.whitePid,"White")}: ${w==="draw"?"draw":(w==="b"?"won":"lost")} (${PP.moves} moves)`);
+  }
+  drawPassPlay();
+}
 
 
 /* ============================ 3N2. DEMO GAMES (WATCH & LEARN) ========== */
@@ -2393,9 +2560,9 @@ async function parentTab(pid,el){
   const [lessons,skill,puz,puzR,streak,badges,acts,coach,gamesSnap]=await Promise.all([
     dbGet(`progress/${pid}/lessons`),dbGet(`progress/${pid}/skill`),dbGet(`progress/${pid}/puzzles`),
     dbGet(`progress/${pid}/puzzleRating`),dbGet(`progress/${pid}/streak`),dbGet(`progress/${pid}/badges`),
-    ref(`activities/${pid}`).limitToLast(8).once("value").then(s=>s.val()),
+    ref(`activities/${pid}`).limitToLast(8).once("value").then(s=>s.val()).catch(()=>null),
     dbGet(`coaching/${pid}/directives`),
-    ref("games").limitToLast(60).once("value").then(s=>s.val()),
+    ref("games").limitToLast(60).once("value").then(s=>s.val()).catch(()=>null),
   ]);
   const lArr=lessons?Object.values(lessons):[];
   const done=lArr.filter(l=>l.completed).length;
@@ -2436,7 +2603,7 @@ Object.assign(window,{gateCreate,gateJoin,doCreateFamily,doJoinFamily,tapProfile
   switchProfile,drawPlaySetup,startComputerGame,offerDraw,resignGame,undoMove,createLiveGame,cancelLive,joinLiveUI,
   doJoinLive,resignLive,leaveLive,resumeLive,dropLive,startDemo,demoStep,demoJump,demoTogglePlay,
   startTTTCpu,startTTTPass,tttTap,tttAgain,createTTTGame,cancelTTT,joinTTTUI,doJoinTTT,resumeTTT,dropTTT,tttRematch,leaveTTT,
-  startPassPlay,parentTab,parentPlayMode,resetFamily,replayDemo,toggleVoice});
+  startPassPlay,ppPick,ppBegin,parentTab,parentPlayMode,resetFamily,replayDemo,toggleVoice});
 boot();
 </script>
 </body>
