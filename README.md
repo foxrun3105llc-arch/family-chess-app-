@@ -11,6 +11,14 @@ across devices with no login required on the kids' iPads.
 
 ## Revisions
 
+### Rev 12 — 2026-11-07
+- **Offline mode:** the app now works with no internet (road trips!). Each iPad keeps a saved copy of the family, profiles, and progress, so the app opens and plays fully offline — lessons, puzzles, vs-computer, famous games, tic-tac-toe, and pass-and-play. A small "📴 Offline" pill shows when there's no connection.
+- **Syncs itself later:** everything done offline (game results, XP, lessons, streaks) is stored on the iPad in an outbox and uploads automatically when the internet comes back, with a "☁️ Synced!" note when it lands.
+- **Pass-and-play counts now:** before a pass-and-play game you pick who is White and who is Black from the family profiles (or Guest for a just-for-fun game). With two named players, the result is saved for both — winner gets +15 XP, a draw gives both +5 — online or offline. The end screen keeps the final board visible with the winner's name.
+- Live two-iPad games still need the internet; the Play family screen says so when offline and points to pass-and-play instead.
+- Added a service worker so the app itself can open offline after the first online visit.
+
+
 ### Rev 11 — 2026-11-01
 - Game-over screens (vs computer and live family games) now keep the final
   board on screen under the result banner, with the last move and the
