@@ -11,6 +11,19 @@ across devices with no login required on the kids' iPads.
 
 ## Revisions
 
+### Rev 13 — 2026-11-07 — Merida pieces, 3D tournament boards, jumbo home
+- Piece artwork swapped everywhere from Cburnett outlines to the shaded Merida set
+  (design: Armando H. Marroquin, via Lichess's open piece library), bundled inline so it works offline.
+- Game boards (vs computer, live family, pass-and-play) now render on a 3D stage: cream + tournament-green
+  squares (#EEEED2 / #769656 family) on a dark walnut slab, player-perspective view, pieces standing and
+  anchored to their square centers with silhouette + contact shadows.
+- Tilt (0-65) and Angle (-60..60) sliders under each game board; the chosen view is remembered per device.
+- Board coordinates (a-h, 1-8) enlarged and bolded on the edges of every board.
+- Home screen rebuilt as option B jumbo tiles: Next lesson, Puzzles, Play the computer, Play family,
+  Famous games, Tic-Tac-Toe.
+- Lessons, puzzles and demo boards stay flat for readability. Service worker cache bumped to v13.
+
+
 ### Rev 12 — 2026-11-07
 - **Offline mode:** the app now works with no internet (road trips!). Each iPad keeps a saved copy of the family, profiles, and progress, so the app opens and plays fully offline — lessons, puzzles, vs-computer, famous games, tic-tac-toe, and pass-and-play. A small "📴 Offline" pill shows when there's no connection.
 - **Syncs itself later:** everything done offline (game results, XP, lessons, streaks) is stored on the iPad in an outbox and uploads automatically when the internet comes back, with a "☁️ Synced!" note when it lands.
