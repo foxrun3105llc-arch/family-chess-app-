@@ -129,9 +129,9 @@ p{font-size:17px;line-height:1.55;color:var(--ink);}
 .board3d-on .pshadow{position:absolute;left:50%;bottom:34%;width:82%;height:25%;transform:translateX(-50%);
   background:radial-gradient(ellipse at center,rgba(20,30,8,.5),rgba(20,30,8,0) 66%);pointer-events:none;}
 .board3d-on .pcw{position:absolute;inset:0;transform-style:preserve-3d;pointer-events:none;}
-.board3d-on .pci{position:absolute;left:50%;bottom:50%;width:103%;transform-origin:50% 100%;pointer-events:none;
+.board3d-on .pci{position:absolute;left:50%;bottom:43%;width:103%;transform-origin:50% 100%;pointer-events:none;
   transform:translateX(-50%) rotateZ(calc(var(--spin,0deg) * -1)) rotateX(calc(var(--tilt,52deg) * -1));}
-.board3d-on .pcsvg{width:100%;height:auto;filter:drop-shadow(3px 5px 4px rgba(15,25,5,.45));}
+.board3d-on .pcsvg{width:100%;height:auto;aspect-ratio:1/1;filter:drop-shadow(3px 5px 4px rgba(15,25,5,.45));}
 .viewctl{display:flex;gap:14px;align-items:center;justify-content:center;flex-wrap:wrap;margin:10px 0 2px;
   font-weight:700;font-size:14px;color:var(--ink-soft);}
 .viewctl input[type=range]{width:110px;vertical-align:middle;}
@@ -11373,22 +11373,43 @@ function bonusChallenge(){ go("puzzles"); setTimeout(()=>toast("Bonus challenge:
           dots:[sq], caps:[sq], interactive:bool, onTap(sq), showCoords} */
 /* ---- rev 13: 3D view state for game boards (per-device, remembered) ---- */
 const LS_VIEW="cla_view3d";
-let VIEW3D={tilt:52, spin:0};
-try{ const v=JSON.parse(localStorage.getItem(LS_VIEW)||"null"); if(v&&typeof v.tilt==="number"&&typeof v.spin==="number") VIEW3D=v; }catch(e){}
+let VIEW3D={tilt:52, spin:0, mode:"3d"};
+try{ const v=JSON.parse(localStorage.getItem(LS_VIEW)||"null");
+  if(v&&typeof v.tilt==="number"&&typeof v.spin==="number"){ VIEW3D.tilt=v.tilt; VIEW3D.spin=v.spin; if(v.mode==="2d"||v.mode==="3d") VIEW3D.mode=v.mode; }
+}catch(e){}
 function saveView(){ try{ localStorage.setItem(LS_VIEW, JSON.stringify(VIEW3D)); }catch(e){} }
 function setView(k, v){
   VIEW3D[k]=+v;
   document.querySelectorAll(".board3d-on").forEach(b=>{ b.style.setProperty("--tilt",VIEW3D.tilt+"deg"); b.style.setProperty("--spin",VIEW3D.spin+"deg"); });
 }
+function resetView(){
+  VIEW3D.tilt=52; VIEW3D.spin=0; saveView();
+  document.querySelectorAll(".board3d-on").forEach(b=>{ b.style.setProperty("--tilt","52deg"); b.style.setProperty("--spin","0deg"); });
+  document.querySelectorAll(".vtilt").forEach(i=>{ i.value=52; });
+  document.querySelectorAll(".vspin").forEach(i=>{ i.value=0; });
+}
+function setViewMode(m){ VIEW3D.mode=m; saveView(); refreshGameScreen(); }
+function refreshGameScreen(){
+  const top=NAV[NAV.length-1];
+  if(top==="nearby"&&NP) drawNearbyBoard();
+  else if(top==="livegame"&&LG) drawLiveBoard();
+  else if(top==="passplay") renderPassPlaySafe();
+  else if(top==="playgame"&&PG) drawPlayGame();
+}
 function viewControlsHTML(){
+  if(VIEW3D.mode==="2d")
+    return `<div class="viewctl"><span>🎥 Board view: <b>2D flat</b></span>
+    <button class="btn sky" onclick="setViewMode('3d')">🎲 Switch to 3D view</button></div>`;
   return `<div class="viewctl"><span>🎥 Board view</span>
-  <label>Tilt <input type="range" min="0" max="65" value="${VIEW3D.tilt}" oninput="setView('tilt',this.value)" onchange="saveView()"></label>
-  <label>Angle <input type="range" min="-60" max="60" value="${VIEW3D.spin}" oninput="setView('spin',this.value)" onchange="saveView()"></label></div>`;
+  <label>Tilt <input class="vtilt" type="range" min="0" max="65" value="${VIEW3D.tilt}" oninput="setView('tilt',this.value)" onchange="saveView()"></label>
+  <label>Angle <input class="vspin" type="range" min="-60" max="60" value="${VIEW3D.spin}" oninput="setView('spin',this.value)" onchange="saveView()"></label>
+  <button class="btn ghost" onclick="resetView()">↺ Reset view</button>
+  <button class="btn sky" onclick="setViewMode('2d')">🧊 2D view</button></div>`;
 }
 function drawBoard(el, game, opts){
   opts = opts||{};
   el.innerHTML="";
-  if(opts.stage){
+  if(opts.stage && VIEW3D.mode!=="2d"){
     el.classList.add("board3d-on");
     el.style.setProperty("--tilt", VIEW3D.tilt+"deg");
     el.style.setProperty("--spin", VIEW3D.spin+"deg");
@@ -11414,7 +11435,7 @@ function drawBoard(el, game, opts){
       u.setAttribute("href","#p"+piece.color+piece.type);
       u.setAttributeNS("http://www.w3.org/1999/xlink","xlink:href","#p"+piece.color+piece.type);
       s.appendChild(u);
-      if(opts.stage){
+      if(opts.stage && VIEW3D.mode!=="2d"){
         const sh=document.createElement("div"); sh.className="pshadow"; d.appendChild(sh);
         const w=document.createElement("div"); w.className="pcw";
         const pv=document.createElement("div"); pv.className="pci"; pv.appendChild(s); w.appendChild(pv); d.appendChild(w);
@@ -12919,7 +12940,7 @@ Object.assign(window,{gateCreate,gateJoin,doCreateFamily,doJoinFamily,tapProfile
   switchProfile,drawPlaySetup,startComputerGame,offerDraw,resignGame,undoMove,createLiveGame,cancelLive,joinLiveUI,
   doJoinLive,resignLive,leaveLive,resumeLive,dropLive,startDemo,demoStep,demoJump,demoTogglePlay,
   startTTTCpu,startTTTPass,tttTap,tttAgain,createTTTGame,cancelTTT,joinTTTUI,doJoinTTT,resumeTTT,dropTTT,tttRematch,leaveTTT,
-  startPassPlay,ppPick,ppBegin,nearbyStart,nearbyJoin,nearbyCancel,nearbyResign,nearbyHostScanAnswer,setView,saveView,parentTab,parentPlayMode,resetFamily,replayDemo,toggleVoice});
+  startPassPlay,ppPick,ppBegin,nearbyStart,nearbyJoin,nearbyCancel,nearbyResign,nearbyHostScanAnswer,setView,saveView,resetView,setViewMode,parentTab,parentPlayMode,resetFamily,replayDemo,toggleVoice});
 boot();
 </script>
 </body>
