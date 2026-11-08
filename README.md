@@ -11,6 +11,17 @@ across devices with no login required on the kids' iPads.
 
 ## Revisions
 
+### Rev 15 — 2026-11-07 — Grounded pieces, Reset view, 2D/3D toggle
+- Bug fix: pieces on the 3D stage floated about a row above their squares. The piece <svg> has no
+  viewBox of its own, so height:auto gave it a tall letterboxed box and the artwork centered inside it.
+  Stage pieces now force a square aspect, and the anchor moved from 50% to 43% so the drawn base of the
+  Merida artwork (which ends ~93% down its canvas) sits exactly on the contact shadow.
+- View controls on game boards now include: Reset view (back to the starting tilt 52 / angle 0), and a
+  2D/3D toggle — 2D renders the classic flat top-down board; the button then offers 3D, and vice versa.
+  The chosen mode is remembered per device along with tilt/angle.
+- Service worker cache bumped to v15.
+
+
 ### Rev 14 — 2026-11-07 — Nearby play (hotspot + QR handshake)
 - New mode in Play family: two iPads on the same Wi-Fi or phone hotspot play live with NO internet.
   Connection invitation is exchanged by QR code (host shows an offer code, guest scans and shows an
