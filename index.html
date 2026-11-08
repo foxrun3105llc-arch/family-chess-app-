@@ -11719,7 +11719,7 @@ function drawPlaySetup(){
 }
 function startComputerGame(){
   let kc=PG.kidColor; if(kc==="r") kc=Math.random()<0.5?"w":"b";
-  PG={game:new Chess(), kidColor:kc, aiLevel:PG.aiLevel, sel:null, lastMove:null, over:false, moves:0, undosLeft:3};
+  PG={game:new Chess(), kidColor:kc, aiLevel:PG.aiLevel, sel:null, lastMove:null, over:false, moves:0, undosLeft:3, nextOfferAt:0, endReason:null};
   NAV.push("playgame"); drawPlayGame();
   if(PG.kidColor==="b") setTimeout(aiMove,700);
 }
@@ -11787,7 +11787,49 @@ function updateMoveList(){
   for(let i=0;i<h.length;i+=2) html+=`<tr><td class="muted">${i/2+1}.</td><td><b>${esc(h[i])}</b></td><td>${esc(h[i+1]||"")}</td></tr>`;
   el.innerHTML=html+"</table>"; el.scrollTop=el.scrollHeight;
 }
-function offerDraw(){ if(!PG.over){ PG.over=true; finishComputerGame("draw","You agreed a draw — well played!"); } }
+/* Rev 17: a draw offer is a real offer — the computer judges it fairly.
+   It accepts only when BOTH are true:
+   (1) a real game has been played: at least 40 half-moves (20 moves each), and
+   (2) the computer is not ahead by more than about a pawn on the same
+       evaluation the AI plays with (evaluate(), in centipawns).
+   If the computer is ahead, or it's too early, it politely declines and the
+   game continues. After a decline the kid must play 5 more moves (10
+   half-moves) before asking again — same as real chess manners. */
+function drawOfferVerdict(g, kidColor, plies){
+  if(plies < 40) return {accept:false, why:"early"};
+  const raw = evaluate(g); // + = White ahead
+  const cpuAdv = kidColor==="w" ? -raw : raw; // centipawns in the computer's favour
+  if(cpuAdv > 100) return {accept:false, why:"cpu-ahead", cpuAdv};
+  return {accept:true, why:"fair", cpuAdv};
+}
+function offerDraw(){
+  if(!PG || PG.over) return;
+  const now = PG.moves;
+  const gm = $("#gmsg");
+  const say = (html)=>{ if(gm) gm.innerHTML = `<div class="feedback try" style="text-align:center">${html}</div>`; };
+  if(PG.nextOfferAt && now < PG.nextOfferAt){
+    const left = Math.ceil((PG.nextOfferAt - now)/2);
+    say(`🤝 You just asked! Play ${left} more move${left===1?"":"s"} each, then you can ask again.`);
+    toast("Play a few more moves, then ask again! 🤝", 3200);
+    return;
+  }
+  const v = drawOfferVerdict(PG.game, PG.kidColor, now);
+  const who = AI_NAMES[PG.aiLevel].split(" ").slice(1).join(" "); // e.g. "Fox 🦊"
+  if(v.accept){
+    PG.over = true; PG.endReason = "agreed-draw";
+    finishComputerGame("draw", `${who} accepted your draw offer — the game was fair and even! Well played! 🤝`);
+    return;
+  }
+  PG.nextOfferAt = now + 10;
+  if(v.why==="early"){
+    say(`🤝 <b>Too early!</b> ${who} says: “Let's play a real game first — you can offer a draw after 20 moves each. You've played ${Math.floor(now/2)} each so far!”`);
+    toast("Too early for a draw — play 20 moves each first! 🤝", 4000);
+  } else {
+    const aheadTxt = v.cpuAdv>=400 ? "way ahead" : v.cpuAdv>=250 ? "up about a piece" : "a little ahead";
+    say(`🤝 <b>Draw declined.</b> ${who} says: “I'm ${aheadTxt} — a draw wouldn't be fair to me. Let's keep playing!”`);
+    toast(`${who} is ahead, so no draw — keep playing! 💪`, 4000);
+  }
+}
 /* Take back the last full round (kid's move + computer's reply). Max 3 per game. */
 function canUndo(){
   if(!PG||PG.over||PG.undosLeft<=0) return false;
@@ -11804,20 +11846,22 @@ function undoMove(){
   drawPlayGame();
   toast(`↩️ Move taken back — ${PG.undosLeft} undo${PG.undosLeft===1?"":"s"} left`);
 }
-function resignGame(){ if(!PG.over && confirm("Resign this game? The computer will win — tap Cancel to keep playing!")){ PG.over=true; finishComputerGame("loss","Good game! Every loss teaches something. 💪"); } }
+function resignGame(){ if(!PG.over && confirm("Resign this game? The computer will win — tap Cancel to keep playing!")){ PG.over=true; PG.endReason="resign"; finishComputerGame("loss","Good game! Every loss teaches something. 💪"); } }
 async function endComputerGame(){
   const g=PG.game; let result,msg;
-  if(g.in_checkmate()){ const kidWon=g.turn()!==PG.kidColor; result=kidWon?"win":"loss";
+  if(g.in_checkmate()){ const kidWon=g.turn()!==PG.kidColor; result=kidWon?"win":"loss"; PG.endReason="checkmate";
     msg=kidWon?`${praise()} CHECKMATE — YOU WIN! 🏆`:"Checkmate — the computer got this one. You'll get the next! 💪"; }
-  else if(g.in_stalemate()){ result="draw"; msg="Stalemate — a draw! Watch out for those!"; }
-  else { result="draw"; msg="Draw! Well played!"; }
+  else if(g.in_stalemate()){ result="draw"; PG.endReason="stalemate"; msg="Stalemate — a draw! Watch out for those!"; }
+  else if(g.insufficient_material()){ result="draw"; PG.endReason="insufficient-material"; msg="Draw! Neither side has enough pieces left to checkmate. 🤝"; }
+  else if(g.in_threefold_repetition()){ result="draw"; PG.endReason="threefold-repetition"; msg="Draw! The same position happened three times. 🤝"; }
+  else { result="draw"; PG.endReason="fifty-move"; msg="Draw! 50 moves with no captures or pawn moves — that's the 50-move rule. 🤝"; }
   PG.over=true; finishComputerGame(result,msg);
 }
 async function finishComputerGame(result,msg){
   drawPlayBoard();
   const xp=result==="win"?20:result==="draw"?10:5;
   await addXP(xp);
-  const gid=(await dbPush("games",{type:"vs-computer",profileIds:[PROFILE.id],result,difficulty:PG.aiLevel,moveCount:PG.moves,createdAt:Date.now()})).key;
+  const gid=(await dbPush("games",{type:"vs-computer",profileIds:[PROFILE.id],result,difficulty:PG.aiLevel,moveCount:PG.moves,endReason:PG.endReason||null,fen:PG.game.fen(),createdAt:Date.now()})).key;
   await logActivity("game",`vs-computer ${result} (lvl ${PG.aiLevel}, ${PG.moves} moves)`);
   view.innerHTML=topbar("Game over",false)+`
   <div class="card ${result==="win"?"butter":result==="draw"?"sky":"peach"} center">
@@ -13263,7 +13307,7 @@ function drawRPSEnd(){
 
 Object.assign(window,{gateCreate,gateJoin,doCreateFamily,doJoinFamily,tapProfile,tapParent,checkParentPin,
   addProfile,pickColor,doAddProfile,startLesson,answerQuiz,bonusChallenge,retrySimilarPuzzle,ackCoaching,
-  switchProfile,drawPlaySetup,startComputerGame,offerDraw,resignGame,undoMove,createLiveGame,cancelLive,joinLiveUI,
+  switchProfile,drawPlaySetup,startComputerGame,offerDraw,drawOfferVerdict,resignGame,undoMove,createLiveGame,cancelLive,joinLiveUI,
   doJoinLive,resignLive,leaveLive,resumeLive,dropLive,startDemo,demoStep,demoJump,demoTogglePlay,
   startTTTCpu,startTTTPass,tttTap,tttAgain,createTTTGame,cancelTTT,joinTTTUI,doJoinTTT,resumeTTT,dropTTT,tttRematch,leaveTTT,
   startPassPlay,ppPick,ppBegin,createRPSGame,joinRPSUI,doJoinRPS,resumeRPS,dropRPS,rpsPick,rpsNext,rpsEndSession,rpsCancelWaiting,nearbyStart,nearbyJoin,nearbyCancel,nearbyResign,nearbyHostScanAnswer,setView,saveView,resetView,setViewMode,parentTab,parentPlayMode,resetFamily,replayDemo,toggleVoice});
