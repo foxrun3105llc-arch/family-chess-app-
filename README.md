@@ -11,6 +11,26 @@ across devices with no login required on the kids' iPads.
 
 ## Revisions
 
+### Rev 19 — 2026-11-08 — Real 3D board (WebGL), toggle with 2D
+- The "3D view" is now REAL 3D: Three.js r149 (MIT) is inlined (no CDN, offline still works)
+  and pieces are true 3D Staunton-style models built procedurally in code — lathe-turned
+  pawn/rook/bishop/queen/king bodies, an extruded knight, glossy materials, real lights and
+  shadows on the cream + tournament-green board. No external model files or licences needed.
+- The old CSS billboard stage is retired (flat pictures standing up); in 3D mode drawBoard
+  routes game boards (vs computer, live, nearby, pass-and-play) to the WebGL renderer.
+  Board taps are raycast onto per-square hit planes; highlights, move dots, capture rings and
+  a-h/1-8 coordinates (sprites) all work in 3D. Tilt/Angle sliders and Reset view now drive
+  the camera. Camera elevation is clamped to 88 degrees (a perfectly vertical view makes
+  the picking math degenerate).
+- 2D is unchanged and remains the default (rev 18). The toggle works both ways mid-game.
+  If WebGL is unavailable or fails, the board falls back to the flat 2D renderer.
+- Verified in Node (no WebGL available headless here): full-app syntax check; a 101-assertion
+  suite — piece bounding boxes (bases at y=0, heights pawn .68 < rook .75 < knight .97 <
+  bishop .98 < queen 1.02 < king 1.12, all fit their square) and tap-picking: projecting all
+  sampled squares back through the camera raycasts to the correct square at tilts 0/35/52/65,
+  spins -60/+60, for both White and Black orientations, with correct screen corners.
+  On-device visual check is still the real test — iPads open the app online once to update.
+
 ### Rev 18 — 2026-11-08 — Flat 2D board is the default again
 - Kid feedback on the rev 13 3D stage: the tilted board is hard to read (hard to tell which
   square a piece is on) and the standing pieces "look like images rotating instead of objects"
