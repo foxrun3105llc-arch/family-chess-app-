@@ -11,6 +11,18 @@ across devices with no login required on the kids' iPads.
 
 ## Revisions
 
+### Rev 17 — 2026-11-07 — Fair draw offers (vs computer)
+- The "Draw?" button is now a real draw offer. The computer accepts only when both are true:
+  (1) at least 20 moves each have been played, and (2) the computer is not ahead by more than
+  about a pawn on the same evaluation the AI plays with.
+- Declines explain why in kid-friendly words ("Too early!" / "I'm a little ahead — let's keep
+  playing!") and the game continues; after a decline, 5 moves each must be played before asking again.
+- Why: several recorded "draws" were far too short to be genuine board draws (e.g. a level-3 draw
+  after 6 moves each) — the old button ended the game as a draw on one tap, with no agreement.
+- Every vs-computer game record now also stores how it ended (endReason: checkmate, stalemate,
+  threefold-repetition, insufficient-material, fifty-move, agreed-draw, resign) plus the final
+  position (FEN), so future results can be verified.
+
 ### Rev 16 — 2026-11-07 — Rock Paper Scissors (live family)
 - New home tile and hub: Rock Paper Scissors sessions between two iPads (create/join by 4-letter
   code, sessions in progress listed with resume/remove, same patterns as the other family games).
