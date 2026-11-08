@@ -11,6 +11,15 @@ across devices with no login required on the kids' iPads.
 
 ## Revisions
 
+### Rev 20 — 2026-11-08 — 3D coordinate polish (from live browser QA)
+- A cloud-browser agent played the live app as Ria and verified rev 19 end to end: real 3D
+  pieces with shading/shadows, all 32 pieces placed, sliders and Reset view working, and a
+  full pawn move (b2-b4, computer replied Nc6) completed by tapping in 3D. No errors.
+- Its one nit: in 3D the coordinates sat in the corners of the edge squares — the h-file
+  letter was hidden behind the h1 rook and the rank numbers were small/faint. Coordinates
+  now ride on the wooden slab edge outside the squares (cream on walnut, slightly larger),
+  so no piece can ever cover them.
+
 ### Rev 19 — 2026-11-08 — Real 3D board (WebGL), toggle with 2D
 - The "3D view" is now REAL 3D: Three.js r149 (MIT) is inlined (no CDN, offline still works)
   and pieces are true 3D Staunton-style models built procedurally in code — lathe-turned
