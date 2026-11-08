@@ -11,6 +11,21 @@ across devices with no login required on the kids' iPads.
 
 ## Revisions
 
+### Rev 16 — 2026-11-07 — Rock Paper Scissors (live family)
+- New home tile and hub: Rock Paper Scissors sessions between two iPads (create/join by 4-letter
+  code, sessions in progress listed with resume/remove, same patterns as the other family games).
+- Each round: 5-second pick timer with countdown bar. No pick loses the round; two no-picks is a
+  draw. Picks stay secret until both are locked (or time expires).
+- Reveal: both fists shake three times ("Rock… Paper… Scissors…") then land on the actual gestures
+  with a pop; winner glows, loser dims; a timeout shows a clock and "didn't pick!".
+- Session scoreboard (wins · draws · wins, round number) persists in the Firebase game node.
+  After each round BOTH players must press Next to start the next round. Ending the session shows
+  the final tally; the session winner gets +10 XP and one session record is saved.
+- Round resolution and round advance use Firebase transactions, so simultaneous triggers from
+  both iPads can never double-count a score (verified by a 19-assertion Node simulation).
+- Service worker cache bumped to v16.
+
+
 ### Rev 15 — 2026-11-07 — Grounded pieces, Reset view, 2D/3D toggle
 - Bug fix: pieces on the 3D stage floated about a row above their squares. The piece <svg> has no
   viewBox of its own, so height:auto gave it a tall letterboxed box and the artwork centered inside it.
