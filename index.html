@@ -126,6 +126,10 @@ p{font-size:17px;line-height:1.55;color:var(--ink);}
 .board3d-on .square.light{background:linear-gradient(145deg,#F2F2D8,#E7E7C8);}
 .board3d-on .square.dark{background:linear-gradient(145deg,#7FA35C,#6B9150);}
 .board3d-on .square.light .coord{color:#5F7D43;} .board3d-on .square.dark .coord{color:#EFF3DC;}
+/* rev 18: flat game boards keep the cream + tournament-green colours (no tilt) */
+.board2d-stage .square.light{background:linear-gradient(145deg,#F2F2D8,#E7E7C8);}
+.board2d-stage .square.dark{background:linear-gradient(145deg,#7FA35C,#6B9150);}
+.board2d-stage .square.light .coord{color:#5F7D43;} .board2d-stage .square.dark .coord{color:#EFF3DC;}
 .board3d-on .pshadow{position:absolute;left:50%;bottom:34%;width:82%;height:25%;transform:translateX(-50%);
   background:radial-gradient(ellipse at center,rgba(20,30,8,.5),rgba(20,30,8,0) 66%);pointer-events:none;}
 .board3d-on .pcw{position:absolute;inset:0;transform-style:preserve-3d;pointer-events:none;}
@@ -11394,8 +11398,14 @@ function bonusChallenge(){ go("puzzles"); setTimeout(()=>toast("Bonus challenge:
 /* opts: {orientation:'w'|'b', highlights:{sq:'hint'|'good'|'sel'|'last'|'check'},
           dots:[sq], caps:[sq], interactive:bool, onTap(sq), showCoords} */
 /* ---- rev 13: 3D view state for game boards (per-device, remembered) ---- */
-const LS_VIEW="cla_view3d";
-let VIEW3D={tilt:52, spin:0, mode:"3d"};
+/* Rev 18: the kids found the tilted 3D board hard to read ("pieces look like
+   images rotating instead of objects" — the standing pieces are flat artwork
+   billboards, so that never really goes away). Flat 2D is now the default.
+   The storage key moved to _v2 so every device resets to flat once, ignoring
+   old saved 3D angles; 3D stays available via the view controls and is then
+   remembered under the new key. */
+const LS_VIEW="cla_view3d_v2";
+let VIEW3D={tilt:52, spin:0, mode:"2d"};
 try{ const v=JSON.parse(localStorage.getItem(LS_VIEW)||"null");
   if(v&&typeof v.tilt==="number"&&typeof v.spin==="number"){ VIEW3D.tilt=v.tilt; VIEW3D.spin=v.spin; if(v.mode==="2d"||v.mode==="3d") VIEW3D.mode=v.mode; }
 }catch(e){}
@@ -11432,12 +11442,13 @@ function drawBoard(el, game, opts){
   opts = opts||{};
   el.innerHTML="";
   if(opts.stage && VIEW3D.mode!=="2d"){
-    el.classList.add("board3d-on");
+    el.classList.add("board3d-on"); el.classList.remove("board2d-stage");
     el.style.setProperty("--tilt", VIEW3D.tilt+"deg");
     el.style.setProperty("--spin", VIEW3D.spin+"deg");
     const wrap=el.closest(".board-wrap"); if(wrap) wrap.classList.add("stage-wrap");
   } else {
     el.classList.remove("board3d-on");
+    if(opts.stage) el.classList.add("board2d-stage"); else el.classList.remove("board2d-stage");
     const wrap=el.closest(".board-wrap"); if(wrap) wrap.classList.remove("stage-wrap");
   }
   const orient = opts.orientation||"w";
