@@ -11,6 +11,19 @@ across devices with no login required on the kids' iPads.
 
 ## Revisions
 
+### Rev 18 — 2026-11-08 — Flat 2D board is the default again
+- Kid feedback on the rev 13 3D stage: the tilted board is hard to read (hard to tell which
+  square a piece is on) and the standing pieces "look like images rotating instead of objects"
+  — accurate: they are flat artwork billboards counter-rotated to stay upright, so they can
+  never look like real 3D objects. True 3D pieces would need a WebGL rebuild.
+- Game boards (vs computer, live, nearby, pass-and-play) now open FLAT by default. The view
+  preference storage key moved to cla_view3d_v2, so every device resets to flat once and old
+  saved tilt/angle choices are ignored; the 3D view is still one tap away in the view controls
+  ("Switch to 3D view") and is remembered under the new key if chosen.
+- Flat game boards use the cream + tournament-green squares from the 3D board (instead of the
+  wood-brown), so the colours stay consistent and high-contrast. Lessons, puzzles, demos and
+  final boards are unchanged.
+
 ### Rev 17 — 2026-11-07 — Fair draw offers (vs computer)
 - The "Draw?" button is now a real draw offer. The computer accepts only when both are true:
   (1) at least 20 moves each have been played, and (2) the computer is not ahead by more than
