@@ -139,6 +139,25 @@ p{font-size:17px;line-height:1.55;color:var(--ink);}
 .qrbox{width:min(78vw,340px);margin:10px auto;background:#fff;padding:6px;border-radius:12px;}
 .qrbox svg{width:100%;height:auto;display:block;}
 .scanvideo{width:min(84vw,420px);max-height:46vh;border-radius:14px;background:#000;}
+/* rev 16: rock paper scissors */
+.jtile.coral{background:var(--coral);}
+.rps-pick{display:flex;gap:12px;justify-content:center;margin:14px 0;flex-wrap:wrap;}
+.rps-btn{font-size:52px;width:96px;height:96px;border-radius:24px;border:3px solid var(--peach);background:var(--white);cursor:pointer;box-shadow:var(--shadow);line-height:1;}
+.rps-btn.sel{border-color:#7FB6F5;background:var(--sky);transform:scale(1.07);}
+.rps-btn:disabled{cursor:default;}
+.rps-hands{display:flex;justify-content:space-around;align-items:flex-start;margin:8px 0;}
+.rps-hand{text-align:center;min-width:110px;}
+.rps-hand .gesture{font-size:84px;line-height:1.15;display:inline-block;}
+.rps-hand .who{font-size:16px;font-weight:800;color:var(--ink);}
+.rps-hand.win .gesture{filter:drop-shadow(0 0 16px rgba(255,195,40,.95));}
+.rps-hand.lose{opacity:.45;}
+@keyframes rpsshake{0%,100%{transform:translateY(0) rotate(0deg)}25%{transform:translateY(-14px) rotate(-7deg)}75%{transform:translateY(-4px) rotate(5deg)}}
+.rps-hand.shaking .gesture{animation:rpsshake .28s ease-in-out 3;}
+@keyframes rpspop{0%{transform:scale(.55)}60%{transform:scale(1.28)}100%{transform:scale(1)}}
+.rps-hand.pop .gesture{animation:rpspop .35s ease-out;}
+.rps-timerbar{height:14px;border-radius:8px;background:rgba(0,0,0,.08);overflow:hidden;margin:8px auto;max-width:420px;}
+.rps-timerbar>div{height:100%;background:linear-gradient(90deg,#FFB59E,#FF8FA3);transition:width .15s linear;}
+.rps-score{font-size:19px;font-weight:800;text-align:center;}
 /* rev 13: home jumbo tiles (option B) */
 .tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0;}
 .jtile{border:none;border-radius:20px;padding:16px 14px;min-height:112px;display:flex;flex-direction:column;
@@ -10609,11 +10628,13 @@ function render(screen, arg){
   ({gate:renderGate, profiles:renderProfiles, home:renderHome, lesson:renderLesson,
     quiz:renderQuiz, puzzles:renderPuzzles, play:renderPlay, live:renderLiveLobby,
     demos:renderDemos, demo:renderDemoSafe, ttt:renderTTTHub, tttgame:renderTTTSafe,
+    rps:renderRPSHub, rpsgame:renderRPSGameSafe,
     livegame:renderLiveGameSafe, nearby:renderNearbySafe, playgame:renderPlayGameSafe, passplay:renderPassPlaySafe,
     parent:renderParent}[screen]||renderGate)(arg);
 }
 function renderLiveGameSafe(){ if(LG&&LG.data) drawLiveBoard(); else render("live"); }
 function renderNearbySafe(){ if(NP&&NP.game&&(NP.stage==="game"||NP.stage==="over")) drawNearbyBoard(); else render("live"); }
+function renderRPSGameSafe(){ if(RPS&&RPS.data) drawRPSGame(); else render("rps"); }
 function renderPlayGameSafe(){ if(PG&&PG.game) drawPlayGame(); else render("play"); }
 function renderPassPlaySafe(){ if(PP&&PP.game) drawPassPlay(); else if(PPSET) drawPPSetup(); else render("live"); }
 
@@ -11152,6 +11173,7 @@ async function renderHome(){
     <button class="jtile rose" onclick="go('live')"><span class="jg">👧🧒</span><span class="jl">Play family</span></button>
     <button class="jtile butter" onclick="go('demos')"><span class="jg">🎬</span><span class="jl">Famous games</span></button>
     <button class="jtile lav" onclick="go('ttt')"><span class="jg">⭕</span><span class="jl">Tic-Tac-Toe</span></button>
+    <button class="jtile coral" onclick="go('rps')"><span class="jg">✊</span><span class="jl">Rock Paper Scissors</span></button>
   </div>
   <h2>📚 Lessons <span class="muted" style="font-size:15px">${doneCount}/${LESSONS.length} done</span></h2>
   ${rows}
@@ -12935,12 +12957,316 @@ async function parentTab(pid,el){
 /* ============================ 3P. BOOT =================================== */
 window.back=back; window.go=go;
 // expose handlers used by inline onclick
+/* ============================ 3Q. ROCK PAPER SCISSORS (live family) =======
+   Two iPads, one session: each round both players get 5 seconds to pick.
+   No pick loses the round; two no-picks is a draw. Scores live in the game
+   node; round resolution and round advance run through transactions so
+   both iPads can race safely and exactly one result is ever written. */
+let RPS=null;
+const RPS_EMOJI={rock:"✊", paper:"✋", scissors:"✌️"};
+const RPS_BEATS={rock:"scissors", paper:"rock", scissors:"paper"};
+const RPS_PHRASE={ "rock>scissors":"Rock crushes scissors!", "paper>rock":"Paper covers rock!", "scissors>paper":"Scissors cut paper!" };
+function rpsWinnerOf(a, b){
+  if(!a && !b) return "draw";
+  if(!a) return "p2";
+  if(!b) return "p1";
+  if(a===b) return "draw";
+  return RPS_BEATS[a]===b ? "p1" : "p2";
+}
+function renderRPSHub(){
+  view.innerHTML=topbar("Rock Paper Scissors")+`
+  <div class="card coral center"><div class="big-emoji">✊✋✌️</div><h2>Rock Paper Scissors</h2>
+  <p class="muted">Five seconds to pick — too slow loses the round! First to tap wins nothing… it's just for glory. 🏆</p></div>
+  ${OFFLINE?`<div class="card rose center"><p style="margin:0">📴 <b>You're offline.</b> Family Rock Paper Scissors needs the internet so both iPads can play together.</p></div>`
+  :`<div class="card lavender center"><h3>👧🧒 Play family</h3>
+  <button class="btn primary big" onclick="createRPSGame()">✨ Create a game</button>
+  <button class="btn sky big" onclick="joinRPSUI()">🔑 Join with code</button></div>`}
+  <div id="myrps"></div>`;
+  if(!OFFLINE) loadMyRPSGames();
+}
+async function createRPSGame(){
+  const code=rnd(4);
+  await dbSet(`rpsGames/${code}`,{status:"waiting",p1:PROFILE.id,p2:null,round:1,phase:"pick",
+    picks:{p1:null,p2:null},endsAt:0,scores:{p1:0,p2:0,draws:0},ready:{p1:false,p2:false},
+    lastResult:null,recordedBy:null,updatedAt:Date.now()});
+  await logActivity("rps",`created ${code}`);
+  enterRPSGame(code,"p1");
+}
+function joinRPSUI(){
+  view.innerHTML=topbar("Join game")+`
+  <div class="card sky center"><h2>Enter the game code</h2>
+  <input type="text" id="rpscode" maxlength="4" placeholder="ABCD" autocomplete="off"
+    style="text-transform:uppercase;letter-spacing:6px;text-align:center;font-size:32px;font-family:ui-monospace,monospace;">
+  <button class="btn primary big" onclick="doJoinRPS()">Join! ✊</button></div>`;
+}
+async function doJoinRPS(){
+  const code=(($("#rpscode").value||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,""));
+  const d=await dbGet(`rpsGames/${code}`);
+  if(!d){ toast("No game with that code. Check it and try again!"); return; }
+  if(d.status==="ended"){ toast("That session already ended."); return; }
+  const mine=d.p1===PROFILE.id?"p1":d.p2===PROFILE.id?"p2":null;
+  if(mine){ await logActivity("rps",`resumed ${code}`); enterRPSGame(code,mine); return; }
+  if(d.status!=="waiting"){ toast("That game already has two players."); return; }
+  await dbUpdate(`rpsGames/${code}`,{p2:PROFILE.id,status:"active",phase:"pick",endsAt:Date.now()+5000,updatedAt:Date.now()});
+  await logActivity("rps",`joined ${code}`);
+  enterRPSGame(code,"p2");
+}
+async function loadMyRPSGames(){
+  const box=$("#myrps"); if(!box) return;
+  let all=null, profs=null;
+  try{ all=await dbGet("rpsGames"); profs=await dbGet("profiles"); }catch(e){}
+  if(!all){ box.innerHTML=""; return; }
+  const mine=Object.entries(all).filter(([c,g])=>g&&(g.p1===PROFILE.id||g.p2===PROFILE.id)&&(g.status==="waiting"||g.status==="active"))
+    .sort((a,b)=>(b[1].updatedAt||0)-(a[1].updatedAt||0));
+  if(!mine.length){ box.innerHTML=""; return; }
+  const nameOf=id=>(profs&&profs[id]&&profs[id].name)||"Opponent";
+  box.innerHTML=`<div class="card sky"><h3>🎮 Your sessions in progress</h3>`+mine.map(([code,g])=>{
+    const slot=g.p1===PROFILE.id?"p1":"p2";
+    const oppId=slot==="p1"?g.p2:g.p1;
+    const s=g.scores||{p1:0,p2:0,draws:0};
+    const state=g.status==="waiting"?"Waiting for your opponent — share the code!":`Round ${g.round||1} · score ${s.p1}–${s.p2}`;
+    const when=g.updatedAt?(" · last played "+relTime(g.updatedAt)):"";
+    return `<div class="game-row"><div><b>${code}</b> · vs ${esc(oppId?nameOf(oppId):"…")}<br><span class="muted">${state}${when}</span></div>
+    <button class="btn primary" onclick="resumeRPS('${code}')">▶ Continue</button>
+    <button class="btn ghost" onclick="dropRPS('${code}')" aria-label="Remove game">🗑</button></div>`;
+  }).join("")+`</div>`;
+}
+async function resumeRPS(code){
+  const d=await dbGet(`rpsGames/${code}`);
+  if(!d){ toast("That session is gone."); renderRPSHub(); return; }
+  const slot=d.p1===PROFILE.id?"p1":d.p2===PROFILE.id?"p2":null;
+  if(!slot){ toast("That session belongs to other players."); return; }
+  if(d.status==="ended"){ toast("That session already ended."); renderRPSHub(); return; }
+  enterRPSGame(code,slot);
+}
+async function dropRPS(code){
+  if(!confirm("Remove this session? It will be gone for both players.")) return;
+  try{ await ref(`rpsGames/${code}`).remove(); }catch(e){}
+  await logActivity("rps",`removed unfinished session ${code}`);
+  renderRPSHub();
+}
+async function enterRPSGame(code, slot){
+  LIVE_UNSUBS.forEach(u=>{try{u();}catch(e){}}); LIVE_UNSUBS=[];
+  RPS={code, slot, data:null, oppName:"Opponent", animRound:0, resolveTried:0, xpGiven:false, endShown:false, ended:false, timerInt:null};
+  NAV.push("rpsgame");
+  const cb=ref(`rpsGames/${code}`).on("value", async snap=>{
+    const d=snap.val();
+    if(!d){ if(RPS&&!RPS.ended){ toast("Game closed."); back(); } return; }
+    RPS.data=d;
+    const oppPid=slot==="p1"?d.p2:d.p1;
+    if(oppPid&&RPS.oppName==="Opponent"){ const n=await dbGet(`profiles/${oppPid}/name`); if(n) RPS.oppName=n; }
+    if(d.status==="ended"){ drawRPSEnd(); return; }
+    if(d.status==="active"&&d.phase==="pick"&&d.picks&&d.picks.p1&&d.picks.p2) resolveRPS();
+    if(d.status==="active"&&d.phase==="reveal"&&d.ready&&d.ready.p1&&d.ready.p2) rpsAdvance();
+    drawRPSGame();
+  });
+  LIVE_UNSUBS.push(()=>ref(`rpsGames/${code}`).off("value",cb));
+  LIVE_UNSUBS.push(()=>{ if(RPS&&RPS.timerInt){ clearInterval(RPS.timerInt); RPS.timerInt=null; } });
+  drawRPSGame();
+}
+function resolveRPS(){
+  if(!RPS) return;
+  ref(`rpsGames/${RPS.code}`).transaction(cur=>{
+    if(!cur||cur.status!=="active"||cur.phase!=="pick") return;
+    const a=cur.picks?cur.picks.p1:null, b=cur.picks?cur.picks.p2:null;
+    if(!( (a&&b) || Date.now()>(cur.endsAt||0)+500 )) return;
+    const w=rpsWinnerOf(a,b);
+    const scores=cur.scores||{p1:0,p2:0,draws:0};
+    if(w==="draw") scores.draws=(scores.draws||0)+1; else scores[w]=(scores[w]||0)+1;
+    cur.scores=scores;
+    cur.lastResult={a:a||null, b:b||null, winner:w,
+      why:(!a&&!b)?"both-slow":((!a||!b)?"timeout":(w==="draw"?"tie":"play"))};
+    cur.phase="reveal"; cur.endsAt=0; cur.updatedAt=Date.now();
+    return cur;
+  });
+}
+function rpsAdvance(){
+  if(!RPS) return;
+  ref(`rpsGames/${RPS.code}`).transaction(cur=>{
+    if(!cur||cur.status!=="active"||cur.phase!=="reveal") return;
+    if(!(cur.ready&&cur.ready.p1&&cur.ready.p2)) return;
+    cur.round=(cur.round||1)+1;
+    cur.phase="pick"; cur.picks={p1:null,p2:null}; cur.ready={p1:false,p2:false};
+    cur.endsAt=Date.now()+5000; cur.lastResult=null; cur.updatedAt=Date.now();
+    return cur;
+  });
+}
+async function rpsPick(choice){
+  if(!RPS||!RPS.data||RPS.data.phase!=="pick"||RPS.data.status!=="active") return;
+  if(RPS.data.picks&&RPS.data.picks[RPS.slot]) return;
+  const upd={updatedAt:Date.now()}; upd["picks/"+RPS.slot]=choice;
+  await ref(`rpsGames/${RPS.code}`).update(upd);
+}
+async function rpsNext(){
+  if(!RPS||!RPS.data||RPS.data.phase!=="reveal") return;
+  const upd={updatedAt:Date.now()}; upd["ready/"+RPS.slot]=true;
+  await ref(`rpsGames/${RPS.code}`).update(upd);
+}
+async function rpsCancelWaiting(){
+  if(!RPS) return;
+  try{ await ref(`rpsGames/${RPS.code}`).remove(); }catch(e){}
+  back();
+}
+async function rpsEndSession(){
+  if(!RPS||!RPS.data||RPS.data.status==="ended") return;
+  if(!confirm("End the session now? The final score is what counts!")) return;
+  const myPid=PROFILE.id;
+  const res=await ref(`rpsGames/${RPS.code}`).transaction(cur=>{
+    if(!cur||cur.status==="ended") return;
+    cur.status="ended"; cur.recordedBy=myPid; cur.updatedAt=Date.now();
+    return cur;
+  }).catch(()=>null);
+  if(res&&res.committed) await recordRPSSession();
+}
+async function recordRPSSession(){
+  const d=RPS?RPS.data:await dbGet(`rpsGames/${RPS.code}`);
+  if(!d) return;
+  const s=d.scores||{p1:0,p2:0,draws:0};
+  const rounds=(s.p1||0)+(s.p2||0)+(s.draws||0);
+  if(!rounds||!d.p1||!d.p2) return;
+  const winnerPid=s.p1>s.p2?d.p1:s.p2>s.p1?d.p2:null;
+  await dbPush("games",{type:"rps",profileIds:[d.p1,d.p2],
+    result:winnerPid?(winnerPid===d.p1?"p1-wins":"p2-wins"):"draw",
+    winnerPid, moveCount:rounds, createdAt:Date.now()});
+  await logActivity("rps",`session ${RPS?RPS.code:""} finished ${s.p1}-${s.p2} (${s.draws} draws)`);
+}
+function rpsStartTimer(){
+  if(!RPS) return;
+  if(RPS.timerInt){ clearInterval(RPS.timerInt); RPS.timerInt=null; }
+  const d=RPS.data;
+  if(!d||d.status!=="active"||d.phase!=="pick"||!d.endsAt) return;
+  const endsAt=d.endsAt, round=d.round;
+  const tick=()=>{
+    if(!RPS||!RPS.data) return;
+    const num=document.getElementById("rps-timer-num"), bar=document.getElementById("rps-timer-fill");
+    if(!num&&!bar){ if(RPS.timerInt){ clearInterval(RPS.timerInt); RPS.timerInt=null; } return; }
+    const left=Math.max(0, endsAt-Date.now());
+    if(num) num.textContent=Math.ceil(left/1000);
+    if(bar) bar.style.width=Math.min(100,left/50)+"%";
+    if(left<=0&&RPS.resolveTried!==round){ RPS.resolveTried=round; setTimeout(()=>resolveRPS(),700); }
+  };
+  tick();
+  RPS.timerInt=setInterval(tick,150);
+}
+function rpsResultText(d){
+  const lr=d.lastResult; if(!lr) return "";
+  const n1=RPS.slot==="p1"?PROFILE.name:RPS.oppName, n2=RPS.slot==="p2"?PROFILE.name:RPS.oppName;
+  const nameOf=s=>s==="p1"?n1:n2;
+  if(lr.why==="both-slow") return "Nobody picked — it's a draw! 🐌🐌";
+  if(lr.why==="timeout"){
+    const slow=lr.a? "p2":"p1";
+    return `⏰ ${esc(nameOf(slow))} was too slow — ${esc(nameOf(lr.winner))} wins the round!`;
+  }
+  if(lr.why==="tie") return `Both picked ${RPS_EMOJI[lr.a]} — draw!`;
+  const phrase=RPS_PHRASE[lr.winner==="p1"?`${lr.a}>${lr.b}`:`${lr.b}>${lr.a}`]||"";
+  return `${phrase} ${esc(nameOf(lr.winner))} wins the round! 🎉`;
+}
+function drawRPSGame(){
+  if(!RPS) return;
+  const d=RPS.data;
+  if(RPS.timerInt){ clearInterval(RPS.timerInt); RPS.timerInt=null; }
+  if(!d){
+    view.innerHTML=topbar("Rock Paper Scissors")+`<div class="card center"><p class="muted">Loading…</p></div>`;
+    return;
+  }
+  const n1=RPS.slot==="p1"?PROFILE.name:RPS.oppName, n2=RPS.slot==="p2"?PROFILE.name:RPS.oppName;
+  const s=d.scores||{p1:0,p2:0,draws:0};
+  const scoreHTML=`<p class="rps-score">${esc(n1)} ${s.p1||0} · 🤝 ${s.draws||0} · ${s.p2||0} ${esc(n2)}</p>`;
+  if(d.status==="waiting"){
+    view.innerHTML=topbar("Rock Paper Scissors")+`
+    <div class="card butter center"><h2>Share this code!</h2>
+    <div class="lobby-code">${RPS.code}</div>
+    <p>On the other iPad: <b>Rock Paper Scissors → Join with code</b></p>
+    <p class="muted">Waiting for your opponent…</p>
+    <button class="btn rose" onclick="rpsCancelWaiting()">Cancel</button></div>`;
+    return;
+  }
+  const myPick=d.picks?d.picks[RPS.slot]:null;
+  const oppPick=d.picks?d.picks[RPS.slot==="p1"?"p2":"p1"]:null;
+  if(d.phase==="pick"){
+    view.innerHTML=topbar("Rock Paper Scissors")+`
+    <div class="card">${scoreHTML}
+    <p class="center muted" style="margin:2px 0">Round ${d.round||1} — pick before the timer runs out!</p>
+    <div class="center" style="font-size:34px;font-weight:800">⏱️ <span id="rps-timer-num">5</span></div>
+    <div class="rps-timerbar"><div id="rps-timer-fill" style="width:100%"></div></div>
+    <div class="rps-pick">
+      ${["rock","paper","scissors"].map(c=>`<button class="rps-btn ${myPick===c?"sel":""}" ${myPick?"disabled":""} onclick="rpsPick('${c}')" aria-label="${c}">${RPS_EMOJI[c]}</button>`).join("")}
+    </div>
+    <p class="center">${myPick?"✅ <b>Locked in!</b> Waiting for "+esc(RPS.oppName)+"…":esc(RPS.oppName)+(oppPick?" is ✅ locked in — hurry!":" is choosing… 🤔")}</p>
+    </div>`;
+    rpsStartTimer();
+    return;
+  }
+  /* reveal phase */
+  const lr=d.lastResult||{a:null,b:null,winner:"draw",why:"both-slow"};
+  const myG=RPS.slot==="p1"?lr.a:lr.b, oppG=RPS.slot==="p1"?lr.b:lr.a;
+  const iWon=lr.winner===RPS.slot, oppWon=lr.winner&&lr.winner!==RPS.slot&&lr.winner!=="draw";
+  const fresh=RPS.animRound!==d.round;
+  const handHTML=(g,who,win,lose,side)=>`
+    <div class="rps-hand ${fresh?"shaking":(win?"win pop":lose?"lose pop":"pop")}" id="rps-hand-${side}">
+      <span class="gesture">${fresh?"✊":(g?RPS_EMOJI[g]:"⏰")}</span>
+      <div class="who">${esc(who)}</div>
+      ${fresh?"":(g?"":"<div class='muted'>didn't pick!</div>")}
+    </div>`;
+  const myReady=d.ready&&d.ready[RPS.slot], oppReady=d.ready&&d.ready[RPS.slot==="p1"?"p2":"p1"];
+  view.innerHTML=topbar("Rock Paper Scissors")+`
+  <div class="card">${scoreHTML}
+  <p class="center muted" style="margin:2px 0">Round ${d.round||1}</p>
+  <div class="center" style="font-size:21px;font-weight:800;min-height:30px" id="rps-result">${fresh?"Rock… Paper… Scissors…":rpsResultText(d)}</div>
+  <div class="rps-hands">
+    ${handHTML(myG,PROFILE.name,iWon,oppWon,"me")}
+    ${handHTML(oppG,RPS.oppName,oppWon,iWon,"opp")}
+  </div>
+  <div id="rps-next" class="center">
+    ${myReady?`<p class="muted">Waiting for ${esc(RPS.oppName)} to press Next…</p>`
+             :`<button class="btn primary big" onclick="rpsNext()">Next round ▶</button>`}
+    <div style="margin-top:8px"><button class="btn ghost" onclick="rpsEndSession()">End session</button></div>
+  </div></div>`;
+  if(fresh){
+    RPS.animRound=d.round;
+    setTimeout(()=>{
+      if(!RPS||!RPS.data||RPS.data.phase!=="reveal"||RPS.data.round!==d.round) return;
+      const upd=(side,g,win,lose)=>{
+        const h=document.getElementById("rps-hand-"+side); if(!h) return;
+        h.classList.remove("shaking"); h.classList.add("pop");
+        if(win) h.classList.add("win"); if(lose) h.classList.add("lose");
+        const gest=h.querySelector(".gesture"); if(gest) gest.textContent=g?RPS_EMOJI[g]:"⏰";
+        if(!g && !h.querySelector(".muted")){ const dv=document.createElement("div"); dv.className="muted"; dv.textContent="didn't pick!"; h.appendChild(dv); }
+      };
+      upd("me",myG,iWon,oppWon); upd("opp",oppG,oppWon,iWon);
+      const rt=document.getElementById("rps-result"); if(rt) rt.textContent=rpsResultText(RPS.data);
+    },1000);
+  }
+}
+function drawRPSEnd(){
+  if(!RPS||!RPS.data) return;
+  const d=RPS.data, s=d.scores||{p1:0,p2:0,draws:0};
+  RPS.ended=true;
+  if(RPS.timerInt){ clearInterval(RPS.timerInt); RPS.timerInt=null; }
+  const n1=RPS.slot==="p1"?PROFILE.name:RPS.oppName, n2=RPS.slot==="p2"?PROFILE.name:RPS.oppName;
+  const rounds=(s.p1||0)+(s.p2||0)+(s.draws||0);
+  const sessionWinner=s.p1>s.p2?"p1":s.p2>s.p1?"p2":"draw";
+  const iWon=sessionWinner===RPS.slot;
+  if(!RPS.endShown){
+    RPS.endShown=true;
+    if(iWon&&rounds>0){ try{ addXP(10); }catch(e){} confetti(90); }
+    try{ setTimeout(()=>{ if(RPS) ref(`rpsGames/${RPS.code}`).remove().catch(()=>{}); },30000); }catch(e){}
+  }
+  view.innerHTML=topbar("Session over",false)+`
+  <div class="card ${iWon?"butter":"sky"} center"><div class="big-emoji">${sessionWinner==="draw"?"🤝":iWon?"🏆":"💪"}</div>
+  <h1>${sessionWinner==="draw"?"It's a tie session!":iWon?"You win the session! 🏆":esc(RPS.oppName)+" wins the session!"}</h1>
+  <p class="rps-score">${esc(n1)} ${s.p1||0} · 🤝 ${s.draws||0} · ${s.p2||0} ${esc(n2)}</p>
+  <p class="muted">${rounds} round${rounds===1?"":"s"} played</p>
+  <button class="btn primary big" onclick="render('rps')">↻ New session</button>
+  <button class="btn ghost big" onclick="NAV=['home'];render('home')">Home</button></div>`;
+}
+
 Object.assign(window,{gateCreate,gateJoin,doCreateFamily,doJoinFamily,tapProfile,tapParent,checkParentPin,
   addProfile,pickColor,doAddProfile,startLesson,answerQuiz,bonusChallenge,retrySimilarPuzzle,ackCoaching,
   switchProfile,drawPlaySetup,startComputerGame,offerDraw,resignGame,undoMove,createLiveGame,cancelLive,joinLiveUI,
   doJoinLive,resignLive,leaveLive,resumeLive,dropLive,startDemo,demoStep,demoJump,demoTogglePlay,
   startTTTCpu,startTTTPass,tttTap,tttAgain,createTTTGame,cancelTTT,joinTTTUI,doJoinTTT,resumeTTT,dropTTT,tttRematch,leaveTTT,
-  startPassPlay,ppPick,ppBegin,nearbyStart,nearbyJoin,nearbyCancel,nearbyResign,nearbyHostScanAnswer,setView,saveView,resetView,setViewMode,parentTab,parentPlayMode,resetFamily,replayDemo,toggleVoice});
+  startPassPlay,ppPick,ppBegin,createRPSGame,joinRPSUI,doJoinRPS,resumeRPS,dropRPS,rpsPick,rpsNext,rpsEndSession,rpsCancelWaiting,nearbyStart,nearbyJoin,nearbyCancel,nearbyResign,nearbyHostScanAnswer,setView,saveView,resetView,setViewMode,parentTab,parentPlayMode,resetFamily,replayDemo,toggleVoice});
 boot();
 </script>
 </body>
