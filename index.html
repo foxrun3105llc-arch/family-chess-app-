@@ -11619,7 +11619,7 @@ function wglLabelSprite(ch, colorHex){
   x.fillStyle=colorHex; x.fillText(ch,64,70);
   const tex=new THREE.CanvasTexture(c);
   const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false}));
-  sp.scale.set(0.30,0.30,1);
+  sp.scale.set(0.36,0.36,1);
   WGL_TEX_CACHE[key]=sp;
   return sp;
 }
@@ -11735,15 +11735,15 @@ function drawBoardGL(el, game, opts){
         d.rotation.x=-Math.PI/2; d.position.set(x,0.145,z); root.add(d);
       }
       if(opts.showCoords!==false){
-        const lightSq=((r+f)%2===0);
-        const col=lightSq?"#5F7D43":"#EFF3DC";
+        // coordinates ride on the slab edge, outside the squares, so pieces
+        // can never hide them (rev 20: the h-file letter was behind the rook)
         if(f===0){
-          const sp=wglLabelSprite(String(8-r),col);
-          sp.position.set(x-0.33,0.20,z-0.33); root.add(sp);
+          const sp=wglLabelSprite(String(8-r),"#EFF3DC");
+          sp.position.set(-4.30,0.22,z); root.add(sp);
         }
         if(r===7){
-          const sp=wglLabelSprite("abcdefgh"[f],col);
-          sp.position.set(x+0.33,0.20,z+0.33); root.add(sp);
+          const sp=wglLabelSprite("abcdefgh"[f],"#EFF3DC");
+          sp.position.set(x,0.22,4.30); root.add(sp);
         }
       }
     }
